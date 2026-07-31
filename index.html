@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Daily</title>
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;600&family=Karla:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/tokens.css">
+<style>
+  main {
+    max-width: 34rem;
+    margin: 0 auto;
+    padding: 3rem 1.25rem;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.75rem;
+    margin: 0 0 0.25rem;
+  }
+  hr {
+    border: 0;
+    border-top: var(--rule-width) solid var(--rule);
+    margin: 1.75rem 0;
+  }
+  p { line-height: 1.6; margin: 0 0 1rem; }
+  .counter {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 4rem;
+    line-height: 1;
+    color: var(--accent);
+  }
+  .check { color: var(--accent); font-weight: 600; }
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    color: var(--sepia);
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Daily</h1>
+  <p class="meta">Phase 1 &middot; hosting check</p>
+
+  <hr>
+
+  <p><span class="check">&check;</span> GitHub Pages is serving this page.</p>
+  <p>If the heading is a serif, this paragraph is not, and the numeral below is
+     monospaced and green, then the fonts and palette both load correctly.</p>
+
+  <div class="counter">06</div>
+  <p class="meta">Signature element &middot; experiment day counter</p>
+
+  <hr>
+
+  <p class="meta">Next: phase 2, data layer</p>
+  <p><code>github.js</code> and the pure parts of <code>sync.js</code>, tested under
+     <code>node --test</code> with a mocked fetch.</p>
+</main>
+</body>
+</html>

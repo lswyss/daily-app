@@ -1,0 +1,64 @@
+/* Design tokens for The Daily.
+   Herbarium sheets and botanical field notebooks, not generic warm minimalism.
+   The accent is the only accent. Boldness is spent on the experiment day counter. */
+
+:root {
+  --paper: #E9EBE4;
+  --surface: #E9EBE4;
+  --ink: #22271F;
+  --accent: #52684A;
+  --sepia: #8A7F6B;
+  --rule: #DCD9CB;
+  --overdue: #8C3F35;
+
+  --font-display: "Spectral", Georgia, serif;
+  --font-body: "Karla", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Touch targets never go below 44px. */
+  --tap: 44px;
+  --rule-width: 1px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1A1C18;
+    --surface: #23261F;
+    --ink: #DDE0D6;
+    --accent: #8FA882;
+    --sepia: #9A927F;
+    --rule: #33372E;
+    --overdue: #C0705F;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Metadata reads like a pressed-specimen label. */
+.meta {
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sepia);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
