@@ -1,0 +1,10 @@
+{
+  "name": "daily-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The Daily — personal task and experiment dashboard. No build step; this file exists only so node --test parses the ES modules the browser loads natively.",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

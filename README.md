@@ -80,8 +80,47 @@ A build pipeline is one more thing that breaks in eighteen months. **Revisit thi
 first** if the code exceeds roughly 2000 lines or state management starts fighting back;
 the migration path is Vite + React + a Pages Action. Do not pre-emptively take that cost.
 
-`github.js`, `parse.js`, and the pure parts of `sync.js` must have no DOM dependencies, so
-they stay testable under `node --test` with a mocked fetch.
+`github.js`, `store.js`, `parse.js`, and the pure parts of `sync.js` must have no DOM
+dependencies, so they stay testable under `node --test` with a mocked fetch.
+
+### Code map
+
+| File | Responsibility |
+|---|---|
+| `js/github.js` | Contents-API wrapper: read, write-with-SHA, list, delete, `verifyAccess`. One error class per failure mode, because "token died", "someone wrote first", and "you are offline" need three different UI responses. |
+| `js/store.js` | State shape, validation, the mutation log, and the replay reducer. Pure; storage is injected. |
+| `js/sync.js` | Debounced flushing, the retry-once conflict flow, flush serialisation, and inbox-drain planning. |
+| `test/helpers.js` | Recording fetch mock, memory storage, manual timers. No network, no DOM, no real clock. |
+
+`package.json` exists **only** so `node --test` parses these as ES modules. There is still
+no build step; the browser loads the same files natively.
+
+### Running the tests
+
+```bash
+cd daily-app && npm test
+```
+
+Node 25 note: `node --test test/` fails (it tries to load `test` as a module). The glob
+form in `package.json` — `node --test test/*.test.js` — is the one that works.
+
+### Invariants the tests pin down
+
+These are the properties worth breaking a build over. Each has a named test.
+
+- A rejected write re-reads, replays the queued ops against fresh state, and retries
+  **exactly once**. A second rejection returns `status: 'conflict'` and **leaves the queue
+  intact.** It never loops.
+- Only *confirmed* writes are dropped from the queue (`dropFirst`, not `clear`), so taps
+  made while a flush is in flight are never discarded.
+- A file over 1MB comes back from the contents API with `content: ""`. Reading that as an
+  empty `data.json` would wipe everything on the next write, so it throws instead.
+- A missing `data.json` is an error, not an invitation to create one.
+- `parseState` refuses a schema version newer than this build, rather than writing an older
+  shape back over whatever a newer app added.
+- An op against a task that vanished remotely is reported in `skipped`, never swallowed.
+- `statusFor` cannot return `synced` for anything that did not land.
+- Draining the same capture twice produces the same task id, so the second `add` is a no-op.
 
 ---
 
@@ -245,8 +284,8 @@ missing features. Every feature added before validation makes abandonment more l
 | # | Phase | Status |
 |---|---|---|
 | 1 | Repos and hosting | **done** |
-| 2 | Data layer (`github.js`, pure `sync.js`) | next |
-| 3 | Setup flow (token entry, validation, clearing) | |
+| 2 | Data layer (`github.js`, `store.js`, pure `sync.js`) | **done** |
+| 3 | Setup flow (token entry, validation, clearing) | next |
 | 4 | Today view + minimal PWA manifest — **then stop** | |
 | 5 | Apple Shortcut and inbox drain, with review queue | |
 | 6 | Week view | |
@@ -291,3 +330,11 @@ to Obsidian. **Treat that outcome as a successful experiment, not a failure.**
   under any plan rather than being a free-tier workaround.
 - **2026-07-31** — Phase 1 complete: `daily-app` (public, Pages) and `daily-data` (private)
   created, both cloned into iCloud `TheDaily/` with separated git dirs.
+- **2026-07-31** — Phase 2 complete: `github.js`, `store.js`, and the pure parts of
+  `sync.js`, with 69 tests under `node --test`. Two choices worth recording. First, the
+  mutation log drops only *confirmed* entries rather than clearing itself, because a user
+  can tap while a flush is mid-flight and `clear()` would eat those taps. Second, every
+  failure returns a status object rather than throwing past the caller — the sync badge has
+  to distinguish offline from conflict from auth failure, and an exception loses that
+  distinction. A `package.json` was added purely so `node --test` reads the modules as ESM;
+  the app still has no build step.
