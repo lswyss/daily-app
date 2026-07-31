@@ -87,6 +87,9 @@ dependencies, so they stay testable under `node --test` with a mocked fetch.
 
 | File | Responsibility |
 |---|---|
+| `js/config.js` | Device config: token plus which repo holds the data. Storage injected, so it is unit-tested. |
+| `js/main.js` | Entry point and routing. |
+| `js/views/setup.js` | Token entry, live validation against the data repo, sign-out. |
 | `js/github.js` | Contents-API wrapper: read, write-with-SHA, list, delete, `verifyAccess`. One error class per failure mode, because "token died", "someone wrote first", and "you are offline" need three different UI responses. |
 | `js/store.js` | State shape, validation, the mutation log, and the replay reducer. Pure; storage is injected. |
 | `js/sync.js` | Debounced flushing, the retry-once conflict flow, flush serialisation, and inbox-drain planning. |
@@ -121,6 +124,10 @@ These are the properties worth breaking a build over. Each has a named test.
 - An op against a task that vanished remotely is reported in `skipped`, never swallowed.
 - `statusFor` cannot return `synced` for anything that did not land.
 - Draining the same capture twice produces the same task id, so the second `add` is a no-op.
+- A token that fails validation is **never stored.** A stored-but-broken token turns every
+  later failure into a mystery.
+- Signing out clears the queued mutations along with the token, so one account's unsynced
+  edits can never replay against another account's data.
 
 ---
 
@@ -285,7 +292,7 @@ missing features. Every feature added before validation makes abandonment more l
 |---|---|---|
 | 1 | Repos and hosting | **done** |
 | 2 | Data layer (`github.js`, `store.js`, pure `sync.js`) | **done** |
-| 3 | Setup flow (token entry, validation, clearing) | next |
+| 3 | Setup flow (token entry, validation, clearing) | built; awaiting real-token acceptance |
 | 4 | Today view + minimal PWA manifest — **then stop** | |
 | 5 | Apple Shortcut and inbox drain, with review queue | |
 | 6 | Week view | |
@@ -338,3 +345,9 @@ to Obsidian. **Treat that outcome as a successful experiment, not a failure.**
   to distinguish offline from conflict from auth failure, and an exception loses that
   distinction. A `package.json` was added purely so `node --test` reads the modules as ESM;
   the app still has no build step.
+- **2026-07-31** — Phase 3 built: setup flow with live validation. The bad-token half of the
+  acceptance test is verified on the live site — a malformed token is caught locally with no
+  network call, and a well-formed but invalid one produces GitHub's real 401 plus a remedy
+  line, with nothing written to `localStorage`. The good-token half needs a real PAT and so
+  is left to the owner. Note the pasted token is trimmed before use: a trailing newline from
+  a phone paste otherwise produces a 401 that looks like a bad token.
