@@ -325,15 +325,34 @@ button.chip.is-choice[aria-pressed='true'] {
   padding: 0;
 }
 
-.task { border-bottom: var(--rule-width) solid var(--rule); }
+.task {
+  display: flex;
+  align-items: flex-start;
+  border-bottom: var(--rule-width) solid var(--rule);
+}
 
+/* Two targets: the box completes, the text opens the editor. Both clear 44px. */
 .task-toggle {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
-  width: 100%;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--tap);
   min-height: var(--tap);
   padding: 0.75rem 0.25rem;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.task-open {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0.75rem 0.25rem 0.75rem 0;
   text-align: left;
   font-weight: 400;
   color: var(--ink);
@@ -342,11 +361,13 @@ button.chip.is-choice[aria-pressed='true'] {
   border-radius: 0;
 }
 
+.task-open:disabled { cursor: default; opacity: 1; }
+
 .task-mark {
   flex-shrink: 0;
   width: 1.125rem;
   height: 1.125rem;
-  margin-top: 0.1875rem;
+  margin-top: 0.125rem;
   font-family: var(--font-mono);
   font-size: 0.8125rem;
   line-height: 1.0625rem;
@@ -357,13 +378,7 @@ button.chip.is-choice[aria-pressed='true'] {
 }
 
 .task-toggle:hover .task-mark { border-color: var(--accent); }
-
-.task-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-  min-width: 0;
-}
+.task-open:hover:not(:disabled) .task-title { color: var(--accent); }
 
 .task-title {
   font-size: 0.9375rem;
@@ -381,6 +396,24 @@ button.chip.is-choice[aria-pressed='true'] {
 }
 
 .task.is-done .task-mark { background: var(--accent); color: var(--paper); border-color: var(--accent); }
+
+/* ------------------------------------------------------------- editor */
+
+.task.is-editing { display: block; padding: 0.5rem 0 1rem; }
+
+.editor label,
+.editor .meta { margin-bottom: 0.25rem; }
+
+.editor input { margin-bottom: 0.875rem; }
+.editor input[type='date'] { font-family: var(--font-mono); }
+.editor .chips { margin-bottom: 1rem; }
+.editor .preview-actions { flex-wrap: wrap; }
+
+/* ------------------------------------------------- upcoming + done today */
+
+.upcoming { margin-bottom: 1.5rem; }
+.upcoming .day-title { margin: 1rem 0 0.25rem; }
+.upcoming .day-title:first-of-type { margin-top: 0.75rem; }
 
 .done-today { margin-bottom: 1.5rem; }
 .done-today .task { opacity: 0.75; }

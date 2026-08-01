@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { groupForToday, needsConfirmation } from '../js/views/today.js';
 import { parseCapture } from '../js/parse.js';
-import { dueLabel, metaLine } from '../js/components/taskrow.js';
+import { dueLabel, dayHeading, metaLine } from '../js/components/taskrow.js';
 import { badgeState } from '../js/components/syncbadge.js';
 import { seedTask } from './helpers.js';
 
@@ -62,6 +62,50 @@ test('undated tasks are counted rather than silently invisible', () => {
   const groups = groupForToday([seedTask({ id: 'a', due: null })], TODAY);
   assert.equal(groups.lab.length, 0);
   assert.equal(groups.laterCount, 1);
+});
+
+test('future tasks are listed by day, not just counted', () => {
+  // Adding something for Sunday and seeing only "3 scheduled later" gives you no
+  // way to confirm it exists.
+  const tasks = [
+    seedTask({ id: 'sun', due: '2026-08-02', createdAt: '2026-07-31T08:00:00Z' }),
+    seedTask({ id: 'mon', due: '2026-08-03' }),
+    seedTask({ id: 'sun2', due: '2026-08-02', createdAt: '2026-07-31T09:00:00Z' }),
+    seedTask({ id: 'today', due: TODAY }),
+  ];
+
+  const { upcoming, laterCount } = groupForToday(tasks, TODAY);
+
+  assert.equal(laterCount, 3);
+  assert.deepEqual(upcoming.map((d) => d.due), ['2026-08-02', '2026-08-03']);
+  assert.deepEqual(upcoming[0].tasks.map((t) => t.id), ['sun', 'sun2'], 'sorted within a day');
+});
+
+test('undated tasks sit last in upcoming, under their own heading', () => {
+  const tasks = [
+    seedTask({ id: 'nodate', due: null }),
+    seedTask({ id: 'friday', due: '2026-08-07' }),
+  ];
+  const { upcoming } = groupForToday(tasks, TODAY);
+
+  assert.deepEqual(upcoming.map((d) => d.due), ['2026-08-07', null]);
+  assert.equal(dayHeading(null, TODAY), 'No date');
+});
+
+test('completed future tasks do not appear in upcoming', () => {
+  const tasks = [
+    seedTask({ id: 'a', due: '2026-08-05', done: true, completedAt: '2026-07-31T09:00:00Z' }),
+  ];
+  const { upcoming, laterCount } = groupForToday(tasks, TODAY);
+  assert.deepEqual(upcoming, []);
+  assert.equal(laterCount, 0);
+});
+
+test('day headings pair the relative word with the actual date', () => {
+  assert.match(dayHeading('2026-08-01', TODAY), /^tomorrow · /);
+  assert.match(dayHeading('2026-08-02', TODAY), /^Sunday · /);
+  // Beyond a week the relative label is already the date, so it is not repeated.
+  assert.equal(dayHeading('2026-09-15', TODAY), dueLabel('2026-09-15', TODAY));
 });
 
 test('an empty list produces empty groups, not undefined', () => {

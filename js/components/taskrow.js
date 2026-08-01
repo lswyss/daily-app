@@ -37,6 +37,25 @@ export function dueLabel(due, today) {
 }
 
 /**
+ * A heading for a day in the upcoming list: "Tomorrow · 1 Aug".
+ * The relative word carries the meaning; the date removes the ambiguity.
+ * @param {string|null} due
+ * @param {string} today
+ * @returns {string}
+ */
+export function dayHeading(due, today) {
+  if (!due) return 'No date';
+  const [y, m, d] = due.split('-').map(Number);
+  const short = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
+  const relative = dueLabel(due, today);
+  return relative === short ? short : `${relative} · ${short}`;
+}
+
+/**
  * The metadata line: project · experiment · date, omitting what is absent.
  * @param {object} task
  * @param {string} today
@@ -55,36 +74,41 @@ function metaPrefix(task) {
 }
 
 /**
+ * Two targets, both clearing 44px: the box completes, the text opens the editor.
+ * A single whole-row target left no room for editing, and a typo you cannot fix
+ * after the undo toast expires is worse than a slightly smaller complete target.
+ *
  * @param {object} args
  * @param {object} args.task
  * @param {string} args.today
  * @param {(id: string) => void} args.onToggle
+ * @param {(id: string) => void} [args.onOpen]
  * @returns {HTMLElement}
  */
-export function taskRow({ task, today, onToggle }) {
+export function taskRow({ task, today, onToggle, onOpen }) {
   const overdue = !task.done && task.due && task.due < today;
 
   const row = document.createElement('li');
   row.className = `task${overdue ? ' is-overdue' : ''}${task.done ? ' is-done' : ''}`;
   row.dataset.id = task.id;
 
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'task-toggle';
-  // The whole row is the target, so the tap area clears 44px on a phone.
-  button.setAttribute('aria-pressed', String(Boolean(task.done)));
-  button.setAttribute(
-    'aria-label',
-    `${task.done ? 'Mark not done' : 'Complete'}: ${task.title}`,
-  );
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'task-toggle';
+  toggle.setAttribute('aria-pressed', String(Boolean(task.done)));
+  toggle.setAttribute('aria-label', `${task.done ? 'Mark not done' : 'Complete'}: ${task.title}`);
 
   const mark = document.createElement('span');
   mark.className = 'task-mark';
   mark.setAttribute('aria-hidden', 'true');
   mark.textContent = task.done ? '✓' : '';
+  toggle.append(mark);
+  toggle.addEventListener('click', () => onToggle(task.id));
 
-  const body = document.createElement('span');
-  body.className = 'task-body';
+  const open = document.createElement('button');
+  open.type = 'button';
+  open.className = 'task-open';
+  open.setAttribute('aria-label', `Edit: ${task.title}`);
 
   const title = document.createElement('span');
   title.className = 'task-title';
@@ -99,10 +123,10 @@ export function taskRow({ task, today, onToggle }) {
   due.textContent = dueLabel(task.due, today);
   meta.append(document.createTextNode(metaPrefix(task)), due);
 
-  body.append(title, meta);
-  button.append(mark, body);
-  button.addEventListener('click', () => onToggle(task.id));
+  open.append(title, meta);
+  if (onOpen) open.addEventListener('click', () => onOpen(task.id));
+  else open.disabled = true;
 
-  row.append(button);
+  row.append(toggle, open);
   return row;
 }

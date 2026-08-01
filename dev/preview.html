@@ -57,16 +57,31 @@ const state = {
   ],
 };
 
-document.getElementById('view').replaceChildren(
-  renderToday({
-    state,
-    today: TODAY,
-    badge: syncBadge({ status: 'synced', pending: 0, lastSyncedAt: `${TODAY}T09:14:00Z` }),
-    onToggle: (id) => console.log('toggle', id),
-    onAdd: (t) => console.log('add', t),
-    onSettings: () => console.log('settings'),
-  }),
-);
+// Local UI state so the fixture behaves like the app for editing and expanding.
+const ui = { editingId: null, upcomingOpen: false };
+
+function draw() {
+  document.getElementById('view').replaceChildren(
+    renderToday({
+      state,
+      today: TODAY,
+      badge: syncBadge({ status: 'synced', pending: 0, lastSyncedAt: `${TODAY}T09:14:00Z` }),
+      editingId: ui.editingId,
+      upcomingOpen: ui.upcomingOpen,
+      onUpcomingToggle: (open) => { ui.upcomingOpen = open; },
+      onOpen: (id) => { ui.editingId = id; draw(); },
+      onCancelEdit: () => { ui.editingId = null; draw(); },
+      onSaveEdit: (id, changes) => { console.log('save', id, changes); ui.editingId = null; draw(); },
+      onDelete: (id) => { console.log('delete', id); ui.editingId = null; draw(); },
+      onToggle: (id) => console.log('toggle', id),
+      onAdd: (t) => console.log('add', t),
+      onSettings: () => console.log('settings'),
+    }),
+  );
+}
+globalThis.draw = draw;
+globalThis.ui = ui;
+draw();
 
 const badges = document.getElementById('badges');
 for (const [status, pending] of [['synced', 0], ['unsaved', 2], ['syncing', 1], ['offline', 3], ['conflict', 1], ['error', 1]]) {

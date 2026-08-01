@@ -8,20 +8,24 @@
  */
 
 import { parseCapture, toTask, newTaskId, todayIso } from '../parse.js';
-import { taskRow } from '../components/taskrow.js';
+import { taskRow, dayHeading } from '../components/taskrow.js';
+import { taskEditor } from '../components/taskeditor.js';
 
 /**
  * Split tasks into the groups the view renders. Pure, so it is unit-tested.
  *
  * @param {object[]} tasks
  * @param {string} today ISO date
- * @returns {{overdue: object[], lab: object[], personal: object[], doneToday: object[], laterCount: number}}
+ * @returns {{overdue: object[], lab: object[], personal: object[], doneToday: object[], upcoming: Array<{due: string|null, tasks: object[]}>, laterCount: number}}
  */
 export function groupForToday(tasks, today) {
   const overdue = [];
   const lab = [];
   const personal = [];
   const doneToday = [];
+  /** @type {Map<string, object[]>} */
+  const byDay = new Map();
+  const undated = [];
   let laterCount = 0;
 
   for (const task of tasks) {
@@ -31,9 +35,18 @@ export function groupForToday(tasks, today) {
       if (task.completedAt?.slice(0, 10) === today) doneToday.push(task);
       continue;
     }
-    if (!task.due || task.due > today) {
-      if (task.due && task.due > today) laterCount += 1;
-      else if (!task.due) laterCount += 1;
+    if (!task.due) {
+      // Only reachable via the inbox or a manual edit — capture defaults to today.
+      undated.push(task);
+      laterCount += 1;
+      continue;
+    }
+    if (task.due > today) {
+      // Kept as a list rather than a bare count: a task you just added for
+      // Sunday would otherwise vanish with no way to confirm it exists.
+      if (!byDay.has(task.due)) byDay.set(task.due, []);
+      byDay.get(task.due).push(task);
+      laterCount += 1;
       continue;
     }
     if (task.due < today) overdue.push(task);
@@ -49,7 +62,13 @@ export function groupForToday(tasks, today) {
   personal.sort(byCreated);
   doneToday.sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
 
-  return { overdue, lab, personal, doneToday, laterCount };
+  const upcoming = [...byDay.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([due, group]) => ({ due, tasks: group.sort(byCreated) }));
+  // Undated last: it is a holding pen, not a day.
+  if (undated.length > 0) upcoming.push({ due: null, tasks: undated.sort(byCreated) });
+
+  return { overdue, lab, personal, doneToday, upcoming, laterCount };
 }
 
 /**
@@ -86,8 +105,25 @@ function headerDate(today) {
   });
 }
 
-/** @param {string} title @param {object[]} tasks @param {object} options */
-function taskGroup(title, tasks, { today, onToggle, tone = '' }) {
+/**
+ * Render one task as either a row or, if it is the one being edited, an editor.
+ * @param {object} task
+ * @param {object} ctx
+ */
+function rowOrEditor(task, ctx) {
+  if (ctx.editingId === task.id) {
+    return taskEditor({
+      task,
+      onSave: ctx.onSaveEdit,
+      onDelete: ctx.onDelete,
+      onCancel: ctx.onCancelEdit,
+    });
+  }
+  return taskRow({ task, today: ctx.today, onToggle: ctx.onToggle, onOpen: ctx.onOpen });
+}
+
+/** @param {string} title @param {object[]} tasks @param {object} ctx */
+function taskGroup(title, tasks, ctx, tone = '') {
   if (tasks.length === 0) return null;
 
   const section = document.createElement('section');
@@ -99,7 +135,7 @@ function taskGroup(title, tasks, { today, onToggle, tone = '' }) {
 
   const list = document.createElement('ul');
   list.className = 'tasks';
-  for (const task of tasks) list.append(taskRow({ task, today, onToggle }));
+  for (const task of tasks) list.append(rowOrEditor(task, ctx));
 
   section.append(heading, list);
   return section;
@@ -251,6 +287,8 @@ function capturePreview({ parsed, onAdd, onCancel }) {
  * @param {HTMLElement} [args.badge]
  * @param {string} [args.draft] In-progress capture text, preserved across renders.
  * @param {(value: string) => void} [args.onDraft]
+ * @param {boolean} [args.upcomingOpen] Whether the upcoming list is expanded.
+ * @param {(open: boolean) => void} [args.onUpcomingToggle]
  * @returns {HTMLElement}
  */
 export function renderToday({
@@ -262,7 +300,15 @@ export function renderToday({
   badge,
   draft = '',
   onDraft = () => {},
+  upcomingOpen = false,
+  onUpcomingToggle = () => {},
+  editingId = null,
+  onOpen = () => {},
+  onSaveEdit = () => {},
+  onDelete = () => {},
+  onCancelEdit = () => {},
 }) {
+  const ctx = { today, editingId, onToggle, onOpen, onSaveEdit, onDelete, onCancelEdit };
   const view = document.createElement('div');
   view.className = 'today';
 
@@ -376,12 +422,15 @@ export function renderToday({
   view.append(capture);
 
   // ---- groups -----------------------------------------------------------
-  const { overdue, lab, personal, doneToday, laterCount } = groupForToday(state.tasks ?? [], today);
+  const { overdue, lab, personal, doneToday, upcoming, laterCount } = groupForToday(
+    state.tasks ?? [],
+    today,
+  );
 
   const groups = [
-    taskGroup('Overdue', overdue, { today, onToggle, tone: 'overdue' }),
-    taskGroup('Lab', lab, { today, onToggle }),
-    taskGroup('Personal', personal, { today, onToggle }),
+    taskGroup('Overdue', overdue, ctx, 'overdue'),
+    taskGroup('Lab', lab, ctx),
+    taskGroup('Personal', personal, ctx),
   ].filter(Boolean);
 
   if (groups.length === 0) {
@@ -405,15 +454,35 @@ export function renderToday({
 
     const list = document.createElement('ul');
     list.className = 'tasks';
-    for (const task of doneToday) list.append(taskRow({ task, today, onToggle }));
+    for (const task of doneToday) list.append(rowOrEditor(task, ctx));
     done.append(list);
     view.append(done);
   }
 
   if (laterCount > 0) {
-    const later = document.createElement('p');
-    later.className = 'meta later';
-    later.textContent = `${laterCount} scheduled later`;
+    const later = document.createElement('details');
+    later.className = 'upcoming';
+    // Collapsed by default so Today stays the focus, but the open/closed choice
+    // survives a re-render — completing a task must not fold the list back up.
+    later.open = upcomingOpen;
+    later.addEventListener('toggle', () => onUpcomingToggle(later.open));
+
+    const summary = document.createElement('summary');
+    summary.textContent = `Upcoming · ${laterCount}`;
+    later.append(summary);
+
+    for (const day of upcoming) {
+      const heading = document.createElement('h3');
+      heading.className = 'meta day-title';
+      heading.textContent = `${dayHeading(day.due, today)} · ${day.tasks.length}`;
+
+      const list = document.createElement('ul');
+      list.className = 'tasks';
+      for (const task of day.tasks) list.append(rowOrEditor(task, ctx));
+
+      later.append(heading, list);
+    }
+
     view.append(later);
   }
 

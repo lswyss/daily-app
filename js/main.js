@@ -39,6 +39,8 @@ const app = {
   status: 'synced',
   lastSyncedAt: null,
   draft: '',
+  upcomingOpen: false,
+  editingId: null,
   loading: false,
   loadError: null,
 };
@@ -269,6 +271,22 @@ function render() {
       onDraft: (value) => {
         app.draft = value;
       },
+      upcomingOpen: app.upcomingOpen,
+      onUpcomingToggle: (open) => {
+        app.upcomingOpen = open;
+      },
+      editingId: app.editingId,
+      onOpen: (id) => {
+        app.editingId = id;
+        hideToast();
+        render();
+      },
+      onCancelEdit: () => {
+        app.editingId = null;
+        render();
+      },
+      onSaveEdit: handleSaveEdit,
+      onDelete: handleDelete,
       onToggle: handleToggle,
       onAdd: handleAdd,
       onSettings: showSettings,
@@ -304,6 +322,35 @@ function handleToggle(id) {
     label: 'Undo',
     onAction: () => commit(mutation('uncomplete', id)),
   });
+}
+
+/**
+ * Save an edit. Field changes and date changes become separate mutations so the
+ * commit message names what actually happened.
+ * @param {string} id
+ * @param {{edit?: object, due?: string|null}} changes
+ */
+function handleSaveEdit(id, changes) {
+  app.editingId = null;
+
+  if (changes.edit) commit(mutation('edit', id, changes.edit));
+  if ('due' in changes) commit(mutation('reschedule', id, { due: changes.due }));
+
+  if (!changes.edit && !('due' in changes)) render(); // nothing changed; just close
+}
+
+function handleDelete(id) {
+  const task = app.local.tasks.find((t) => t.id === id);
+  app.editingId = null;
+  commit(mutation('delete', id));
+
+  // Deletion is the one destructive action here, so keep a way back for a while.
+  if (task) {
+    toast(`Deleted “${task.title}”`, {
+      label: 'Undo',
+      onAction: () => commit(mutation('add', task.id, task)),
+    });
+  }
 }
 
 function handleAdd(task) {
