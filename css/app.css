@@ -221,6 +221,12 @@ button.quiet.icon {
 
 .capture { margin-bottom: 2rem; }
 
+.capture-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--accent);
+}
+
 .capture-input {
   font-family: var(--font-body);
   font-size: 1rem;
@@ -379,10 +385,11 @@ button.chip.is-choice[aria-pressed='true'] {
 .done-today { margin-bottom: 1.5rem; }
 .done-today .task { opacity: 0.75; }
 
+/* No top rule: the capture input already draws one directly above, and two
+   hairlines with a gap read as an empty list rather than a divider. */
 .empty {
-  padding: 2rem 0;
+  padding: 1.5rem 0;
   color: var(--sepia);
-  border-top: var(--rule-width) solid var(--rule);
 }
 
 .later { margin-top: -0.5rem; }

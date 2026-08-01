@@ -297,11 +297,18 @@ export function renderToday({
   capture.className = 'capture';
   capture.noValidate = true;
 
+  // Without a label the borderless input reads as an example task rather than a
+  // field, and on an empty list there is nothing else to tell you where to type.
+  const label = document.createElement('label');
+  label.className = 'meta capture-label';
+  label.htmlFor = 'capture-input';
+  label.textContent = 'Add a task';
+
   const input = document.createElement('input');
   input.type = 'text';
+  input.id = 'capture-input';
   input.className = 'capture-input';
   input.placeholder = 'sow seeds GB005 tomorrow';
-  input.setAttribute('aria-label', 'Quick capture');
   input.autocomplete = 'off';
   input.spellcheck = false;
   // Dictation and lab codes both suffer from autocapitalise and autocorrect.
@@ -315,7 +322,7 @@ export function renderToday({
   const previewSlot = document.createElement('div');
   previewSlot.className = 'preview-slot';
 
-  capture.append(input, previewSlot);
+  capture.append(label, input, previewSlot);
 
   const clearPreview = () => previewSlot.replaceChildren();
 
@@ -381,7 +388,9 @@ export function renderToday({
     const empty = document.createElement('p');
     empty.className = 'empty';
     empty.textContent =
-      doneToday.length > 0 ? 'Everything due today is done.' : 'Nothing due today.';
+      doneToday.length > 0
+        ? 'Everything due today is done.'
+        : 'Nothing due today. Add one above.';
     view.append(empty);
   } else {
     view.append(...groups);
