@@ -87,6 +87,11 @@ dependencies, so they stay testable under `node --test` with a mocked fetch.
 
 | File | Responsibility |
 |---|---|
+| `js/parse.js` | Quick-capture parsing: text → task, plus what was understood. Dictation-tolerant. Pure; `today` is injected. |
+| `js/views/today.js` | The Today view and the confirm-before-file capture preview. `groupForToday` is pure and tested. |
+| `js/components/taskrow.js` | A task row, shaped like a specimen label. |
+| `js/components/syncbadge.js` | The sync badge. `badgeState` is pure and tested. |
+| `dev/preview.html` | Design fixture: renders Today against fixed sample data, no token, no network. Not linked from the app; safe to delete. |
 | `js/config.js` | Device config: token plus which repo holds the data. Storage injected, so it is unit-tested. |
 | `js/main.js` | Entry point and routing. |
 | `js/views/setup.js` | Token entry, live validation against the data repo, sign-out. |
@@ -128,6 +133,36 @@ These are the properties worth breaking a build over. Each has a named test.
   later failure into a mystery.
 - Signing out clears the queued mutations along with the token, so one account's unsynced
   edits can never replay against another account's data.
+- `parseCapture` never attaches a tag on its own. A near or new experiment code is offered
+  and must be tapped. `E012` against a known `E0013_PegTreatment` prompts — edit distance
+  alone misses that pair, so the leading letter-and-number code is compared separately.
+- Relative dates resolve to absolute ISO at entry. The store never holds "tomorrow".
+- Date maths runs in UTC on ISO strings, so a daylight-saving boundary cannot shift a due
+  date, while "today" is computed from the *local* calendar date.
+
+## Using the quick capture
+
+Type or dictate one line and press Enter. Nothing is saved until you press **Add** — the
+preview exists so a misheard construct code is caught in one glance.
+
+| You say | It understands |
+|---|---|
+| `sow seeds GB005 tomorrow` | title, date → absolute, offers experiment `GB005` |
+| `water gb 005` | the dictated space is closed up → `GB005`, title normalised |
+| `dentist tuesday #personal` | personal scope, next Tuesday |
+| `transfer plates aug 5` / `8/5` / `2026-08-05` | all the same date |
+| `check in 3 days`, `next friday`, `day after tomorrow` | resolved from today |
+| `lab meeting friday #meeting` | type `meeting` |
+
+Defaults worth knowing: scope is **lab** unless you say `#personal` (tap the chip in the
+preview to flip it), and a capture with **no date is filed under today** rather than
+becoming invisible. Type is only ever set by an explicit `#tag` — wording is not guessed at.
+
+## A note on caching
+
+GitHub Pages serves assets with a ten-minute cache. After a push, a browser that already
+has the app open may keep running the old JavaScript for a few minutes. A normal reload is
+often not enough; close the tab, or wait it out. This bites during development, not use.
 
 ---
 
@@ -292,8 +327,8 @@ missing features. Every feature added before validation makes abandonment more l
 |---|---|---|
 | 1 | Repos and hosting | **done** |
 | 2 | Data layer (`github.js`, `store.js`, pure `sync.js`) | **done** |
-| 3 | Setup flow (token entry, validation, clearing) | built; awaiting real-token acceptance |
-| 4 | Today view + minimal PWA manifest — **then stop** | |
+| 3 | Setup flow (token entry, validation, clearing) | **done** |
+| 4 | Today view + minimal PWA manifest — **then stop** | **built; in its trial week** |
 | 5 | Apple Shortcut and inbox drain, with review queue | |
 | 6 | Week view | |
 | 7 | Experiment strip and day counters | |
@@ -351,3 +386,13 @@ to Obsidian. **Treat that outcome as a successful experiment, not a failure.**
   line, with nothing written to `localStorage`. The good-token half needs a real PAT and so
   is left to the owner. Note the pasted token is trimmed before use: a trailing newline from
   a phone paste otherwise produces a 401 that looks like a bad token.
+- **2026-07-31** — Phase 4 built: Today view, quick capture with a confirm-before-file
+  preview, sync badge, undo, and the minimal PWA manifest. Three decisions worth recording.
+  First, a capture with no date is filed under **today** rather than left undated — an
+  undated task would not appear in the only view that exists, which is how tasks get lost.
+  Second, tasks completed *today* stay visible in a collapsed group, because the spec asks
+  for an undo affordance and completion cannot be undone from a list the task has left.
+  Third, the badge reports **unsaved** whenever the queue is non-empty, even between
+  flushes; only a confirmed write with an empty queue reads as synced.
+  **Phase 4 is the stopping point.** Nothing further gets built until this has survived a
+  week of real daily use.
