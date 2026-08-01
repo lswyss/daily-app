@@ -89,7 +89,8 @@ dependencies, so they stay testable under `node --test` with a mocked fetch.
 |---|---|
 | `js/parse.js` | Quick-capture parsing: text → task, plus what was understood. Dictation-tolerant. Pure; `today` is injected. |
 | `js/views/today.js` | The Today view and the confirm-before-file capture preview. `groupForToday` is pure and tested. |
-| `js/components/taskrow.js` | A task row, shaped like a specimen label. |
+| `js/components/taskrow.js` | A task row, shaped like a specimen label. Box completes, text opens the editor. |
+| `js/components/taskeditor.js` | Inline editor. Emits which fields changed, not a whole task. |
 | `js/components/syncbadge.js` | The sync badge. `badgeState` is pure and tested. |
 | `dev/preview.html` | Design fixture: renders Today against fixed sample data, no token, no network. Not linked from the app; safe to delete. |
 | `js/config.js` | Device config: token plus which repo holds the data. Storage injected, so it is unit-tested. |
@@ -162,6 +163,23 @@ have confirmed a code such as `GB005` once, it is registered and never asked abo
 Defaults worth knowing: scope is **lab** unless you say `#personal` (tap the chip in the
 preview to flip it), and a capture with **no date is filed under today** rather than
 becoming invisible. Type is only ever set by an explicit `#tag` — wording is not guessed at.
+
+## Working with tasks
+
+Each row has two targets, both at least 44px:
+
+- **The box** completes the task, with Undo in the toast.
+- **The text** opens an inline editor — change the title, move the date with the native
+  picker, switch lab/personal, or **Delete** (confirmed, with Undo).
+
+Saving emits the smallest mutations that describe what you did: a date change becomes
+`reschedule`, everything else becomes `edit`, and changing nothing writes nothing. That is
+what keeps `git log` readable as a record of intent.
+
+**Upcoming** at the bottom lists everything scheduled beyond today, grouped by day and
+collapsed by default. It exists so a task you just added for Sunday can be confirmed to
+exist — a bare count could not do that. Undated tasks sit last under "No date". The
+open/closed state survives a re-render, so completing something does not fold it back up.
 
 ## A note on caching
 
@@ -411,3 +429,12 @@ to Obsidian. **Treat that outcome as a successful experiment, not a failure.**
   forever. Confirmed tags are now registered on `add`, which is deterministic and therefore
   replay-safe. Registered experiments carry `startDate: null` — phase 7's day counter must
   handle that rather than assume a date it was never given.
+- **2026-07-31** — Two owner-requested additions during the trial, both closing gaps rather
+  than starting new phases. (1) **Upcoming**: future tasks were shown only as a count, so a
+  task added for Sunday vanished with no way to confirm it existed. Now grouped by day in a
+  collapsed `details`. This is deliberately *not* the week view — no columns, no drag, no
+  navigation; phase 6 still stands. (2) **Editing**: the only way to fix a typo was the undo
+  toast, which expires after 8 seconds. Rows now split into two targets — the box completes,
+  the text opens an inline editor with delete. That shrinks the complete target from the
+  whole row to 44px, which is the cost of having an edit affordance at all; a checkbox is
+  the more conventional target anyway.
