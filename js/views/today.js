@@ -52,6 +52,29 @@ export function groupForToday(tasks, today) {
   return { overdue, lab, personal, doneToday, laterCount };
 }
 
+/**
+ * Is there anything here worth stopping the user for?
+ *
+ * The confirm step exists to catch a misheard construct code — not to make every
+ * capture a two-step form. When nothing is ambiguous, the task is filed straight
+ * away and the toast offers an undo instead.
+ *
+ * A missing date is deliberately *not* a reason to stop: filing under today is
+ * the documented default and stopping for it every time would be the friction
+ * this app is trying to avoid.
+ *
+ * @param {import('../parse.js').ParsedCapture} parsed
+ * @param {string} today
+ * @returns {string|null} the reason to confirm, or null to file immediately
+ */
+export function needsConfirmation(parsed, today) {
+  if (parsed.title === '') return 'no-title';
+  if (parsed.experiment && parsed.experiment.status !== 'known') return 'experiment';
+  if (parsed.project && parsed.project.status !== 'known') return 'project';
+  if (parsed.due < today) return 'past-date';
+  return null;
+}
+
 /** A long, human date for the header. */
 function headerDate(today) {
   const [y, m, d] = today.split('-').map(Number);
@@ -306,6 +329,16 @@ export function renderToday({
       projects: state.projects ?? [],
       experiments: (state.experiments ?? []).map((e) => e.id),
     });
+
+    // Nothing ambiguous: file it and get out of the way.
+    if (!needsConfirmation(parsed, today)) {
+      const task = toTask(parsed, { id: newTaskId() });
+      input.value = '';
+      onDraft('');
+      clearPreview();
+      onAdd(task);
+      return;
+    }
 
     const { panel, focus } = capturePreview({
       parsed,

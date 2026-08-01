@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { groupForToday } from '../js/views/today.js';
+import { groupForToday, needsConfirmation } from '../js/views/today.js';
+import { parseCapture } from '../js/parse.js';
 import { dueLabel, metaLine } from '../js/components/taskrow.js';
 import { badgeState } from '../js/components/syncbadge.js';
 import { seedTask } from './helpers.js';
@@ -68,6 +69,41 @@ test('an empty list produces empty groups, not undefined', () => {
   assert.deepEqual(groups.overdue, []);
   assert.deepEqual(groups.lab, []);
   assert.equal(groups.laterCount, 0);
+});
+
+// ------------------------------------------------------ confirm-or-not
+
+const parse = (text, extra = {}) => parseCapture(text, { today: TODAY, ...extra });
+
+test('an ordinary capture files immediately — no confirm step', () => {
+  assert.equal(needsConfirmation(parse('order more petri dishes'), TODAY), null);
+  assert.equal(needsConfirmation(parse('email Jose tomorrow'), TODAY), null);
+  assert.equal(needsConfirmation(parse('dentist tuesday #personal'), TODAY), null);
+});
+
+test('a missing date is not a reason to stop the user', () => {
+  const parsed = parse('order more petri dishes');
+  assert.equal(parsed.dueAssumed, true, 'today was assumed');
+  assert.equal(needsConfirmation(parsed, TODAY), null, 'but that alone must not prompt');
+});
+
+test('an already-known tag files immediately', () => {
+  const parsed = parse('water GB005 tomorrow', { experiments: ['GB005'] });
+  assert.equal(parsed.experiment.status, 'known');
+  assert.equal(needsConfirmation(parsed, TODAY), null);
+});
+
+test('an unrecognised or near-miss code still stops for confirmation', () => {
+  assert.equal(needsConfirmation(parse('water GB005 tomorrow'), TODAY), 'experiment');
+  assert.equal(
+    needsConfirmation(parse('move e012 plates', { experiments: ['E0013_PegTreatment'] }), TODAY),
+    'experiment',
+  );
+});
+
+test('an empty title or a past date stops too', () => {
+  assert.equal(needsConfirmation(parse('tomorrow'), TODAY), 'no-title');
+  assert.equal(needsConfirmation(parse('logged the harvest yesterday'), TODAY), 'past-date');
 });
 
 // ---------------------------------------------------------------- labels

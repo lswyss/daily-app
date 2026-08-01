@@ -142,8 +142,13 @@ These are the properties worth breaking a build over. Each has a named test.
 
 ## Using the quick capture
 
-Type or dictate one line and press Enter. Nothing is saved until you press **Add** — the
-preview exists so a misheard construct code is caught in one glance.
+Type or dictate one line and press Enter. **Nothing else is required** — scope, dates, and
+tags are all optional with defaults.
+
+Most captures file straight away on Enter, with a toast offering Undo. The confirm-before-
+file preview appears **only when there is something worth catching**: an experiment or
+project code that is new or a near-miss, an empty title, or a date in the past. Once you
+have confirmed a code such as `GB005` once, it is registered and never asked about again.
 
 | You say | It understands |
 |---|---|
@@ -396,3 +401,13 @@ to Obsidian. **Treat that outcome as a successful experiment, not a failure.**
   flushes; only a confirmed write with an empty queue reads as synced.
   **Phase 4 is the stopping point.** Nothing further gets built until this has survived a
   week of real daily use.
+- **2026-07-31** — Ergonomics correction on first contact. The owner asked whether tags and
+  dates had to be entered by hand; they never did, but the preview appeared on *every*
+  capture and made optional fields look required. Two changes. (1) The preview now appears
+  only when something is genuinely ambiguous — a new or near-miss code, an empty title, or a
+  past date — and everything else files on Enter with an Undo toast. A missing date is
+  explicitly not a reason to interrupt. (2) **Bug:** confirming "Create GB005" saved the tag
+  on the task but never added it to `experiments`, so the same code would have prompted
+  forever. Confirmed tags are now registered on `add`, which is deterministic and therefore
+  replay-safe. Registered experiments carry `startDate: null` — phase 7's day counter must
+  handle that rather than assume a date it was never given.

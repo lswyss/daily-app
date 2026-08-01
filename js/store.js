@@ -290,7 +290,35 @@ export function applyMutation(state, m) {
       return { state, skipped: 'already-exists' };
     }
     const task = normaliseTask(m.payload);
-    return { state: { ...state, tasks: [...state.tasks, task] }, skipped: null };
+
+    // Register tags the user confirmed, so they are offered next time instead of
+    // being asked about again. This is not auto-creation: a tag only reaches a
+    // task after an explicit choice in the capture preview. Deterministic, so
+    // replaying this mutation against fresh state produces the same result.
+    let { projects, experiments } = state;
+    if (task.project && !projects.includes(task.project)) {
+      projects = [...projects, task.project];
+    }
+    if (task.experiment && !experiments.some((e) => e.id === task.experiment)) {
+      experiments = [
+        ...experiments,
+        {
+          id: task.experiment,
+          label: task.experiment,
+          project: task.project ?? null,
+          // Unknown until the user says. Phase 7's day counter must handle null
+          // rather than assume a start date it was never told.
+          startDate: null,
+          active: true,
+          milestones: [],
+        },
+      ];
+    }
+
+    return {
+      state: { ...state, tasks: [...state.tasks, task], projects, experiments },
+      skipped: null,
+    };
   }
 
   if (index === -1) {

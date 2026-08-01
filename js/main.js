@@ -308,7 +308,12 @@ function handleToggle(id) {
 
 function handleAdd(task) {
   commit(mutation('add', task.id, task));
-  hideToast();
+  // Most captures now skip the confirm step, so the toast is the feedback that
+  // it landed — and the way back if it did not land the way you meant.
+  toast(`Added “${task.title}”`, {
+    label: 'Undo',
+    onAction: () => commit(mutation('delete', task.id)),
+  });
 }
 
 // ----------------------------------------------------------------- boot

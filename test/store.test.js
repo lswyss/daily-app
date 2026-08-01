@@ -108,6 +108,36 @@ test('adding the same id twice is a no-op — this is what makes drains idempote
   assert.equal(state, start, 'unchanged state should be returned by reference');
 });
 
+test('a confirmed tag is registered, so it is never asked about twice', () => {
+  const first = applyMutation(
+    emptyState(TS),
+    mutation('add', 't1', seedTask({ id: 't1', experiment: 'GB005', project: 'Globot' }), TS),
+  ).state;
+
+  assert.deepEqual(first.projects, ['Globot']);
+  assert.equal(first.experiments.length, 1);
+  assert.equal(first.experiments[0].id, 'GB005');
+  assert.equal(first.experiments[0].startDate, null, 'unknown until the user says');
+
+  // A second task on the same experiment must not duplicate the registration.
+  const second = applyMutation(
+    first,
+    mutation('add', 't2', seedTask({ id: 't2', experiment: 'GB005', project: 'Globot' }), TS),
+  ).state;
+
+  assert.deepEqual(second.projects, ['Globot']);
+  assert.equal(second.experiments.length, 1);
+});
+
+test('an untagged task registers nothing', () => {
+  const { state } = applyMutation(
+    emptyState(TS),
+    mutation('add', 't1', seedTask({ id: 't1', experiment: null, project: null }), TS),
+  );
+  assert.deepEqual(state.projects, []);
+  assert.deepEqual(state.experiments, []);
+});
+
 test('complete records when it happened; uncomplete clears it', () => {
   const start = stateWith(seedTask({ id: 't1' }));
   const done = applyMutation(start, mutation('complete', 't1', null, TS)).state;
