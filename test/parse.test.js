@@ -166,6 +166,12 @@ test('the date phrase is removed from the title but the code is kept', () => {
   assert.equal(parsed.due, '2026-08-05');
 });
 
+test('a dictated code is normalised where it sits in the title', () => {
+  // "e012" and "gb 005" are what dictation actually produces.
+  assert.equal(parseCapture('move e012 plates to recovery', ctx()).title, 'Move E012 plates to recovery');
+  assert.equal(parseCapture('sow seeds for gb 005', ctx()).title, 'Sow seeds for GB005');
+});
+
 test('personal scope, however it is said', () => {
   assert.equal(parseCapture('dentist tuesday #personal', ctx()).scope, 'personal');
   assert.equal(parseCapture('call mum #home', ctx()).scope, 'personal');

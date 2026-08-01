@@ -359,6 +359,9 @@ export function parseCapture(raw, context = {}) {
     const codeMatch = title.match(CODE_PATTERN);
     if (codeMatch && !CODE_STOPWORDS.has(codeMatch[1].toUpperCase())) {
       experimentCandidate = `${codeMatch[1].toUpperCase()}${codeMatch[2]}`;
+      // Dictation gives "e012" or "gb 005". Normalise the code where it sits in
+      // the title so the row reads like a lab notebook rather than a transcript.
+      title = title.replace(codeMatch[0], experimentCandidate);
     }
   }
 

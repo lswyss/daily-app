@@ -238,9 +238,10 @@ button.quiet.icon {
 .capture-input::placeholder { color: var(--sepia); opacity: 0.7; }
 
 .preview {
-  margin-top: 1rem;
+  /* No top rule: the capture input's own bottom border already draws one, and
+     two hairlines a few pixels apart read as a mistake. */
+  margin-top: 0;
   padding: 1rem 0 0;
-  border-top: var(--rule-width) solid var(--rule);
 }
 
 .preview-title {
