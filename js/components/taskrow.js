@@ -48,6 +48,12 @@ export function metaLine(task, today) {
     .join(' · ');
 }
 
+/** The part of the metadata line before the date, if any. */
+function metaPrefix(task) {
+  const parts = [task.project, task.experiment].filter(Boolean);
+  return parts.length > 0 ? `${parts.join(' · ')} · ` : '';
+}
+
 /**
  * @param {object} args
  * @param {object} args.task
@@ -84,9 +90,14 @@ export function taskRow({ task, today, onToggle }) {
   title.className = 'task-title';
   title.textContent = task.title;
 
+  // Only the date carries the overdue colour. Reddening the project and
+  // experiment too reads as alarm, and this is a working record, not a nag.
   const meta = document.createElement('span');
   meta.className = 'meta task-meta';
-  meta.textContent = metaLine(task, today);
+  const due = document.createElement('span');
+  due.className = 'task-due';
+  due.textContent = dueLabel(task.due, today);
+  meta.append(document.createTextNode(metaPrefix(task)), due);
 
   body.append(title, meta);
   button.append(mark, body);

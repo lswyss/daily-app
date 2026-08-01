@@ -365,7 +365,7 @@ button.chip.is-choice[aria-pressed='true'] {
 
 .task-meta { font-size: 0.625rem; }
 
-.task.is-overdue .task-meta { color: var(--overdue); }
+.task.is-overdue .task-due { color: var(--overdue); }
 
 .task.is-done .task-title {
   color: var(--sepia);
@@ -404,9 +404,13 @@ button.chip.is-choice[aria-pressed='true'] {
 
 .toast {
   position: fixed;
-  left: 50%;
+  /* Anchoring with left:50% alone makes the shrink-to-fit width only half the
+     screen, so the text wraps to three lines. Inset both sides instead. */
+  left: 0;
+  right: 0;
+  width: fit-content;
+  margin: 0 auto;
   bottom: max(1rem, env(safe-area-inset-bottom));
-  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 0.75rem;
