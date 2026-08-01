@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Daily</title>
 <meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#E9EBE4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1A1C18" media="(prefers-color-scheme: dark)">
+
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Daily">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;600&family=Karla:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -14,10 +24,12 @@
 <body>
 <div class="shell">
   <p id="flash" class="flash" hidden></p>
+  <div id="banner" class="banner" hidden></div>
   <main id="view">
     <noscript><p>Daily needs JavaScript. It runs entirely in the browser.</p></noscript>
   </main>
 </div>
+<div id="toast" class="toast" hidden></div>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

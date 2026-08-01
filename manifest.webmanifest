@@ -1,0 +1,16 @@
+{
+  "name": "Daily",
+  "short_name": "Daily",
+  "description": "Daily task and experiment dashboard",
+  "start_url": "/daily-app/",
+  "scope": "/daily-app/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#E9EBE4",
+  "theme_color": "#E9EBE4",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

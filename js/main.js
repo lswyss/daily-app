@@ -1,59 +1,347 @@
 /**
- * Entry point and routing.
+ * Entry point: wiring, routing, and the optimistic-update loop.
  *
- * Phase 3: two states only — not set up (setup view) and set up (a placeholder
- * that phase 4 replaces with the Today view).
+ * The loop is: user acts → append a mutation → apply it locally → re-render →
+ * debounce a flush. The local copy is always "what the server has, plus what is
+ * still queued", so the screen never disagrees with the badge.
  *
  * @module main
  */
 
 import { loadConfig } from './config.js';
+import { createGitHubClient } from './github.js';
+import {
+  applyMutation,
+  applyMutations,
+  createMutationLog,
+  emptyState,
+  mutation,
+  parseState,
+} from './store.js';
+import { FLUSH_DEBOUNCE_MS, createDebouncer, createFlushQueue, pushMutations } from './sync.js';
+import { todayIso } from './parse.js';
+import { syncBadge } from './components/syncbadge.js';
 import { renderSetup } from './views/setup.js';
+import { renderToday } from './views/today.js';
 
 const root = /** @type {HTMLElement} */ (document.getElementById('view'));
+const flashEl = /** @type {HTMLElement} */ (document.getElementById('flash'));
+const bannerEl = /** @type {HTMLElement} */ (document.getElementById('banner'));
+const toastEl = /** @type {HTMLElement} */ (document.getElementById('toast'));
 const storage = globalThis.localStorage;
 
-/** @param {string} text @param {'ok'|'bad'|''} kind */
+/** @type {{config: any, client: any, base: any, local: any, status: string, lastSyncedAt: string|null, draft: string, loading: boolean, loadError: Error|null}} */
+const app = {
+  config: null,
+  client: null,
+  base: emptyState(),
+  local: emptyState(),
+  status: 'synced',
+  lastSyncedAt: null,
+  draft: '',
+  loading: false,
+  loadError: null,
+};
+
+const log = createMutationLog({
+  storage,
+  onError: (err) => flash(err.message, 'bad'),
+});
+
+// --------------------------------------------------------------- chrome
+
+/** @param {string} text @param {'ok'|'bad'} [kind] */
 function flash(text, kind = 'ok') {
-  const banner = /** @type {HTMLElement} */ (document.getElementById('flash'));
-  banner.textContent = text;
-  banner.className = `flash is-${kind}`;
-  banner.hidden = false;
+  flashEl.textContent = text;
+  flashEl.className = `flash is-${kind}`;
+  flashEl.hidden = false;
+  globalThis.setTimeout(() => {
+    if (flashEl.textContent === text) flashEl.hidden = true;
+  }, 6000);
 }
 
-function renderConnected(config) {
-  const section = document.createElement('section');
-  section.className = 'setup';
-  section.innerHTML = `
-    <h1>Daily</h1>
-    <p class="meta">Phase 3 · device connected</p>
-    <hr>
-    <p>This device can read <strong>${config.owner}/${config.repo}</strong>.</p>
-    <p class="help">
-      The Today view arrives in phase 4. Until then this screen only confirms the token
-      survives a reload — which is phase 3's acceptance test.
-    </p>
-    <hr>
-    <button class="primary" type="button" id="settings">Device settings</button>
-  `;
-  section.querySelector('#settings')?.addEventListener('click', () => route({ force: 'setup' }));
-  return section;
+let toastTimer = null;
+/** @param {string} text @param {{label: string, onAction: () => void}} [action] */
+function toast(text, action) {
+  toastEl.replaceChildren();
+  const label = document.createElement('span');
+  label.textContent = text;
+  toastEl.append(label);
+
+  if (action) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'quiet';
+    button.textContent = action.label;
+    button.addEventListener('click', () => {
+      hideToast();
+      action.onAction();
+    });
+    toastEl.append(button);
+  }
+
+  toastEl.hidden = false;
+  if (toastTimer) globalThis.clearTimeout(toastTimer);
+  toastTimer = globalThis.setTimeout(hideToast, 8000);
 }
 
-/** @param {{force?: 'setup'}} [options] */
-function route(options = {}) {
-  const config = loadConfig(storage);
+function hideToast() {
+  toastEl.hidden = true;
+  if (toastTimer) globalThis.clearTimeout(toastTimer);
+  toastTimer = null;
+}
+
+/** The conflict banner. Persistent — it must not be dismissible by accident. */
+function showConflict() {
+  bannerEl.replaceChildren();
+  const text = document.createElement('p');
+  text.textContent =
+    'Another device wrote first, twice in a row. Your changes are safe on this device but are not on GitHub yet.';
+
+  const actions = document.createElement('div');
+  actions.className = 'banner-actions';
+
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'primary';
+  retry.textContent = 'Try again';
+  retry.addEventListener('click', () => {
+    hideConflict();
+    void flushQueue.request();
+  });
+
+  const discard = document.createElement('button');
+  discard.type = 'button';
+  discard.className = 'danger';
+  discard.textContent = 'Discard my changes';
+  discard.addEventListener('click', () => {
+    if (!globalThis.confirm(`Discard ${log.size()} unsaved change(s) and reload from GitHub?`)) return;
+    log.clear();
+    hideConflict();
+    void reload();
+  });
+
+  actions.append(retry, discard);
+  bannerEl.append(text, actions);
+  bannerEl.hidden = false;
+}
+
+function hideConflict() {
+  bannerEl.hidden = true;
+  bannerEl.replaceChildren();
+}
+
+// ----------------------------------------------------------------- sync
+
+const flushQueue = createFlushQueue(async () => {
+  if (log.isEmpty() || !app.client) return;
+
+  app.status = 'syncing';
+  render();
+
+  const result = await pushMutations({ client: app.client, log });
+
+  if (result.status === 'synced') {
+    // Adopt what was actually written. After a replay this includes the other
+    // device's changes, so rendering our own optimistic copy would be a lie.
+    if (result.state) {
+      app.base = result.state;
+      app.local = applyMutations(app.base, log.all()).state;
+    }
+    app.status = 'synced';
+    app.lastSyncedAt = new Date().toISOString();
+    hideConflict();
+
+    if (result.skipped.length > 0) {
+      flash(
+        `${result.skipped.length} change(s) could not be applied — the task no longer exists.`,
+        'bad',
+      );
+    }
+  } else if (result.status === 'conflict') {
+    app.status = 'conflict';
+    showConflict();
+  } else if (result.status === 'offline') {
+    app.status = 'offline';
+  } else if (result.status === 'error') {
+    app.status = 'error';
+    flash(result.error?.message ?? 'Could not save.', 'bad');
+  }
+
+  render();
+});
+
+const debouncer = createDebouncer(() => void flushQueue.request(), FLUSH_DEBOUNCE_MS);
+
+/** Apply a mutation locally and queue it. */
+function commit(m) {
+  log.append(m);
+  const { state, skipped } = applyMutation(app.local, m);
+  app.local = state;
+  if (skipped) flash(`That task is no longer here (${skipped}).`, 'bad');
+  if (app.status !== 'conflict') app.status = 'unsaved';
+  render();
+  debouncer.schedule();
+}
+
+async function reload() {
+  if (!app.client) return;
+  app.loading = true;
+  app.loadError = null;
+  render();
+
+  try {
+    const file = await app.client.readFile('data.json');
+    if (file === null) throw new Error('data.json is missing from the data repo.');
+    app.base = parseState(file.content);
+    app.local = applyMutations(app.base, log.all()).state;
+    app.status = log.isEmpty() ? 'synced' : 'unsaved';
+    if (log.isEmpty()) app.lastSyncedAt = new Date().toISOString();
+  } catch (err) {
+    app.loadError = /** @type {Error} */ (err);
+    app.status = 'error';
+  } finally {
+    app.loading = false;
+    render();
+  }
+}
+
+// --------------------------------------------------------------- render
+
+function render() {
+  if (!app.config) {
+    root.replaceChildren(
+      renderSetup({
+        storage,
+        onDone: (message) => {
+          flash(message);
+          boot();
+        },
+      }),
+    );
+    return;
+  }
+
+  if (app.loading) {
+    const loading = document.createElement('p');
+    loading.className = 'meta';
+    loading.textContent = 'Loading…';
+    root.replaceChildren(loading);
+    return;
+  }
+
+  if (app.loadError) {
+    const wrap = document.createElement('section');
+    wrap.className = 'setup';
+    const h1 = document.createElement('h1');
+    h1.textContent = 'Daily';
+    const message = document.createElement('p');
+    message.className = 'status is-bad';
+    message.textContent = `Could not load your data: ${app.loadError.message}`;
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'primary';
+    retry.textContent = 'Try again';
+    retry.addEventListener('click', () => void reload());
+    const settings = document.createElement('button');
+    settings.type = 'button';
+    settings.className = 'quiet';
+    settings.textContent = 'Settings';
+    settings.addEventListener('click', showSettings);
+    wrap.append(h1, message, retry, settings);
+    root.replaceChildren(wrap);
+    return;
+  }
+
+  const badge = syncBadge({
+    status: /** @type {any} */ (app.status),
+    pending: log.size(),
+    lastSyncedAt: app.lastSyncedAt,
+    onClick: () => void debouncer.flushNow(),
+  });
+
   root.replaceChildren(
-    options.force === 'setup' || !config
-      ? renderSetup({
-          storage,
-          onDone: (message) => {
-            flash(message);
-            route();
-          },
-        })
-      : renderConnected(config),
+    renderToday({
+      state: app.local,
+      today: todayIso(),
+      badge,
+      draft: app.draft,
+      onDraft: (value) => {
+        app.draft = value;
+      },
+      onToggle: handleToggle,
+      onAdd: handleAdd,
+      onSettings: showSettings,
+    }),
   );
 }
 
-route();
+function showSettings() {
+  root.replaceChildren(
+    renderSetup({
+      storage,
+      onDone: (message) => {
+        flash(message);
+        boot();
+      },
+    }),
+  );
+}
+
+// -------------------------------------------------------------- actions
+
+function handleToggle(id) {
+  const task = app.local.tasks.find((t) => t.id === id);
+  if (!task) return;
+
+  if (task.done) {
+    commit(mutation('uncomplete', id));
+    return;
+  }
+
+  commit(mutation('complete', id));
+  toast(`Completed “${task.title}”`, {
+    label: 'Undo',
+    onAction: () => commit(mutation('uncomplete', id)),
+  });
+}
+
+function handleAdd(task) {
+  commit(mutation('add', task.id, task));
+  hideToast();
+}
+
+// ----------------------------------------------------------------- boot
+
+function boot() {
+  app.config = loadConfig(storage);
+  if (!app.config) {
+    app.client = null;
+    render();
+    return;
+  }
+  app.client = createGitHubClient({
+    token: app.config.token,
+    owner: app.config.owner,
+    repo: app.config.repo,
+  });
+  void reload();
+}
+
+// Flush on the ways a phone actually leaves a page. `pagehide` is the reliable
+// one on iOS; `beforeunload` is not.
+globalThis.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && !log.isEmpty()) debouncer.flushNow();
+});
+globalThis.addEventListener('pagehide', () => {
+  if (!log.isEmpty()) debouncer.flushNow();
+});
+globalThis.addEventListener('online', () => {
+  if (!log.isEmpty()) void flushQueue.request();
+});
+globalThis.addEventListener('offline', () => {
+  app.status = 'offline';
+  render();
+});
+
+boot();

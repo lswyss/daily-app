@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Daily · design fixture</title>
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;600&family=Karla:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/tokens.css">
+<link rel="stylesheet" href="../css/app.css">
+</head>
+<body>
+<!--
+  Design fixture. Renders the Today view against fixed sample data with no token
+  and no network, so the layout can be checked without touching real data.
+  Not linked from the app. Safe to delete.
+-->
+<div class="shell">
+  <main id="view"></main>
+  <hr>
+  <p class="meta">Sync badge states</p>
+  <div id="badges" style="display:flex;flex-wrap:wrap;gap:0.5rem"></div>
+</div>
+<div id="toast" class="toast">
+  <span>Completed “Refresh PEG plates”</span>
+  <button type="button" class="quiet">Undo</button>
+</div>
+
+<script type="module">
+import { renderToday } from '../js/views/today.js';
+import { syncBadge } from '../js/components/syncbadge.js';
+
+const TODAY = '2026-07-31';
+
+const task = (over) => ({
+  type: 'task', project: null, experiment: null, done: false, completedAt: null,
+  createdAt: '2026-07-31T08:00:00Z', source: 'app', notes: '', scope: 'lab', ...over,
+});
+
+const state = {
+  version: 1,
+  updatedAt: `${TODAY}T09:00:00Z`,
+  projects: ['Globot', 'PEG Treatment'],
+  experiments: [{ id: 'E0013_PegTreatment', label: 'PEG drought', startDate: '2026-07-28', active: true, milestones: [] }],
+  tasks: [
+    task({ id: '1', title: 'Refresh PEG plates before the recovery transfer', experiment: 'E0013_PegTreatment', project: 'PEG Treatment', due: '2026-07-28' }),
+    task({ id: '2', title: 'Email Jose about the growth chamber booking', due: '2026-07-30' }),
+    task({ id: '3', title: 'Sow seeds for GB005', experiment: 'GB005', project: 'Globot', due: TODAY }),
+    task({ id: '4', title: 'Image roots at 6 days post-treatment', experiment: 'E0013_PegTreatment', due: TODAY }),
+    task({ id: '5', title: 'Order more square petri dishes', project: 'Globot', due: TODAY }),
+    task({ id: '6', title: 'Dentist, 4pm', scope: 'personal', type: 'appointment', due: TODAY }),
+    task({ id: '7', title: 'Pick up prescription', scope: 'personal', due: TODAY }),
+    task({ id: '8', title: 'Weigh and record fresh mass', due: TODAY, done: true, completedAt: `${TODAY}T09:12:00Z` }),
+    task({ id: '9', title: 'Prep next week protocol', due: '2026-08-06' }),
+  ],
+};
+
+document.getElementById('view').replaceChildren(
+  renderToday({
+    state,
+    today: TODAY,
+    badge: syncBadge({ status: 'synced', pending: 0, lastSyncedAt: `${TODAY}T09:14:00Z` }),
+    onToggle: (id) => console.log('toggle', id),
+    onAdd: (t) => console.log('add', t),
+    onSettings: () => console.log('settings'),
+  }),
+);
+
+const badges = document.getElementById('badges');
+for (const [status, pending] of [['synced', 0], ['unsaved', 2], ['syncing', 1], ['offline', 3], ['conflict', 1], ['error', 1]]) {
+  badges.append(syncBadge({ status, pending }));
+}
+</script>
+</body>
+</html>

@@ -40,6 +40,7 @@ export const FLUSH_DEBOUNCE_MS = 5000;
  * @property {string|null} sha       New blob SHA on success.
  * @property {Array<{mutation: any, reason: string}>} skipped
  * @property {Error|null} error
+ * @property {import('./store.js').DailyState|null} state The state actually written.
  */
 
 /**
@@ -58,7 +59,7 @@ export const FLUSH_DEBOUNCE_MS = 5000;
  */
 export async function pushMutations({ client, log, path = 'data.json', now = () => new Date().toISOString() }) {
   /** @type {PushResult} */
-  const base = { status: 'noop', replays: 0, sha: null, skipped: [], error: null };
+  const base = { status: 'noop', replays: 0, sha: null, skipped: [], error: null, state: null };
 
   const pending = log.all();
   if (pending.length === 0) return base;
@@ -83,13 +84,16 @@ export async function pushMutations({ client, log, path = 'data.json', now = () 
         // Only now is it safe to forget these. Anything appended during the
         // await stays queued, which is why this is dropFirst and not clear.
         log.dropFirst(pending.length);
-        return { status: 'synced', replays, sha: written.sha ?? null, skipped, error: null };
+        // Hand back what was actually written. After a replay this contains the
+        // other device's changes too, so the caller must adopt it rather than
+        // keep rendering its own optimistic copy.
+        return { status: 'synced', replays, sha: written.sha ?? null, skipped, error: null, state };
       } catch (err) {
         if (!(err instanceof ConflictError) || replays >= MAX_REPLAYS) {
           if (err instanceof ConflictError) {
             // Two rejections in a row. Something else is writing actively.
             // Surface it; do not keep trying.
-            return { status: 'conflict', replays, sha: null, skipped, error: err };
+            return { status: 'conflict', replays, sha: null, skipped, error: err, state: null };
           }
           throw err;
         }
