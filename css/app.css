@@ -631,12 +631,14 @@ button.quiet.glyph {
   gap: 2px;
 }
 
+/* No `background` here: `.dot-p*` has equal specificity and is declared earlier,
+   so setting a background on .cal-pip would silently win and blank every colour. */
 .cal-pip {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--rule);
+  /* Empty days keep the grid legible but must not compete with the data. */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rule) 60%, transparent);
 }
 
 .cal-pip.dot { box-shadow: none; }
