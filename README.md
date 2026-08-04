@@ -91,6 +91,10 @@ dependencies, so they stay testable under `node --test` with a mocked fetch.
 | `js/views/today.js` | The Today view and the confirm-before-file capture preview. `groupForToday` is pure and tested. |
 | `js/components/taskrow.js` | A task row, shaped like a specimen label. Box completes, text opens the editor. |
 | `js/components/taskeditor.js` | Inline editor. Emits which fields changed, not a whole task. |
+| `js/components/tasklist.js` | Shared row/editor list, so Today and the calendar cannot drift apart. |
+| `js/calendar.js` | Calendar arithmetic: week/month/year grids, navigation, bucketing. Pure, tested. |
+| `js/color.js` | Dot colour rules and the legend. Pure, tested. |
+| `js/views/calendar.js` | The calendar view at three zoom levels. DOM only. |
 | `js/components/syncbadge.js` | The sync badge. `badgeState` is pure and tested. |
 | `dev/preview.html` | Design fixture: renders Today against fixed sample data, no token, no network. Not linked from the app; safe to delete. |
 | `js/config.js` | Device config: token plus which repo holds the data. Storage injected, so it is unit-tested. |
@@ -176,7 +180,42 @@ Saving emits the smallest mutations that describe what you did: a date change be
 `reschedule`, everything else becomes `edit`, and changing nothing writes nothing. That is
 what keeps `git log` readable as a record of intent.
 
-**Upcoming** at the bottom lists everything scheduled beyond today, grouped by day and
+## Calendar view
+
+The calendar glyph in the header opens it; **← Tasks** returns. The Today view stays the
+landing page — the calendar is somewhere you go deliberately, and opening it always lands on
+the period containing today regardless of where you were last.
+
+Three zoom levels, switched with the Week / Month / Year control (explicit buttons, not
+pinch: pinch is undiscoverable and unusable from a keyboard):
+
+| Zoom | Shows |
+|---|---|
+| **Week** | Seven day sections with full task titles, today emphasised. |
+| **Month** | A grid of coloured dots per day. Tap a day to list it below the grid; tap again to close. |
+| **Year** | Twelve mini-months as density pips. Tap a month name to drill into it. |
+
+Tasks are placed on their **due** date, including completed ones — a task due Monday and
+ticked off on Tuesday belongs on Monday, the way a calendar normally reads. When it was
+actually *done* is the archive's business (phase 8), not the calendar's.
+
+Editing works identically here and on Today: the box completes, the text opens the same
+inline editor. Both views share `components/tasklist.js` so they cannot drift apart.
+
+### Dot colours
+
+- **Personal** is one fixed colour, always, whatever else is set on the task.
+- **Each project** gets its own colour, assigned by its position in `state.projects`. That
+  list is append-only, so a project keeps its colour permanently — adding a new project
+  never recolours the existing ones.
+- **A lab task with no project** is a hollow ring rather than a filled dot. A filled neutral
+  dot was too close to the ochre project colour to tell apart.
+
+The palette is deliberately desaturated. The calendar needs more colour than the rest of the
+app to separate projects; it should still look like a field notebook. Colours repeat after
+six projects. The legend lists only what is actually on screen in the current period.
+
+**Upcoming** on the Today view lists everything scheduled beyond today, grouped by day and
 collapsed by default. It exists so a task you just added for Sunday can be confirmed to
 exist — a bare count could not do that. Undated tasks sit last under "No date". The
 open/closed state survives a re-render, so completing something does not fold it back up.
@@ -351,16 +390,21 @@ missing features. Every feature added before validation makes abandonment more l
 | 1 | Repos and hosting | **done** |
 | 2 | Data layer (`github.js`, `store.js`, pure `sync.js`) | **done** |
 | 3 | Setup flow (token entry, validation, clearing) | **done** |
-| 4 | Today view + minimal PWA manifest — **then stop** | **built; in its trial week** |
-| 5 | Apple Shortcut and inbox drain, with review queue | |
-| 6 | Week view | |
+| 4 | Today view + minimal PWA manifest — **then stop** | **done; trial passed 2026-08-04** |
+| 5 | Apple Shortcut and inbox drain, with review queue | **not built — still the biggest ergonomic win** |
+| 6 | Week view | superseded by the calendar's week zoom |
 | 7 | Experiment strip and day counters | |
-| 8 | Archive view | |
+| 8 | Archive view | partly served by the calendar; "when did I last do X" still needs search |
 | 9 | Service worker (offline app shell) | |
+| — | Calendar view (week/month/year) | **done**, out of phase order by request |
 
-**Phase 4's acceptance test is one full week of real daily use.** If the app is not being
-opened daily by the end of that week, that is the signal to stop the project and fall back
-to Obsidian. **Treat that outcome as a successful experiment, not a failure.**
+**Phase 4's acceptance test was one full week of real daily use — and it passed** on
+2026-08-04, after several days of use. That was the gate the whole project hung on, so later
+phases are now unlocked. The three friction points found during the trial are in the decision
+log; all were real and all are fixed.
+
+Phase 5 remains unbuilt and is still the largest ergonomic win: capturing by voice while
+walking to lab was a founding goal, and everything currently has to be typed into the app.
 
 ---
 
@@ -438,3 +482,21 @@ to Obsidian. **Treat that outcome as a successful experiment, not a failure.**
   the text opens an inline editor with delete. That shrinks the complete target from the
   whole row to 44px, which is the cost of having an edit affordance at all; a checkbox is
   the more conventional target anyway.
+- **2026-08-04** — **Trial passed.** Several days of real use, reported as working well. The
+  phase-4 gate is cleared.
+- **2026-08-04** — Calendar view added by request, deliberately out of phase order (phase 5,
+  the voice Shortcut, is still unbuilt and is still the bigger ergonomic win). Week / month /
+  year zoom, reached from a glyph in the Today header; Today remains the landing page. Four
+  decisions worth recording. (1) Tasks are placed by `due`, not `completedAt`, including
+  completed ones — a calendar reads by when a thing was scheduled; when it was actually done
+  is the archive's job. (2) Zoom is explicit buttons, not pinch, which is undiscoverable and
+  keyboard-hostile. (3) Project colours are assigned by index into the append-only
+  `state.projects`, so a project's colour never changes when another is added. (4) "Lab, no
+  project" is a hollow ring, because a filled neutral dot was indistinguishable from the
+  ochre project colour. Two bugs were caught in review: `.cal-pip` set
+  `background: transparent`, which silently beat every `.dot-p*` colour through source order
+  and rendered a whole year of data as empty rings; and the month grid needed testing for
+  whole-week coverage, which `calendar.js` now has.
+  Note this partly overlaps phases 6 and 8 — the week zoom supersedes the planned week view,
+  and the calendar answers some of what the archive was for, but not "when did I last do X",
+  which still needs search.
