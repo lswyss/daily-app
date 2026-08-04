@@ -297,7 +297,7 @@ const CODE_STOPWORDS = new Set(['DAY', 'RUN', 'REP', 'SET', 'NO', 'PH', 'AT', 'X
  * Parse one captured line.
  *
  * @param {string} raw
- * @param {{today?: string, projects?: string[], experiments?: string[], defaultScope?: 'lab'|'personal'}} [context]
+ * @param {{today?: string, projects?: string[], experiments?: string[], defaultScope?: 'lab'|'personal', forceType?: string}} [context]
  * @returns {ParsedCapture}
  */
 export function parseCapture(raw, context = {}) {
@@ -359,6 +359,11 @@ export function parseCapture(raw, context = {}) {
     projectCandidate = plusMatch[1];
     working = working.replace(plusMatch[0], ' ');
   }
+
+  // The Ideas screen knows what the user is doing before a word is parsed. This
+  // must be applied *here*, before date extraction: forcing the type afterwards
+  // would already have stripped "on monday" out of the text.
+  if (context.forceType) type = context.forceType;
 
   // --- date -------------------------------------------------------------
   // Ideas are undated by definition — they are not owed to anyone on a day. Date

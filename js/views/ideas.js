@@ -178,14 +178,15 @@ export function renderIdeas({
     const raw = input.value.trim();
     if (raw === '') return;
 
-    // Force the idea type: on this screen that is what the user is doing, even if
-    // they did not say the word "idea".
+    // forceType, not a post-hoc override: the parser has to know it is an idea
+    // before it decides whether to pull a date out of the text.
     const parsed = parseCapture(raw, {
       today,
+      forceType: 'idea',
       projects: state.projects ?? [],
       experiments: (state.experiments ?? []).map((e) => e.id),
     });
-    const idea = toTask({ ...parsed, type: 'idea', due: null }, { id: newTaskId() });
+    const idea = toTask(parsed, { id: newTaskId() });
 
     input.value = '';
     onDraft('');

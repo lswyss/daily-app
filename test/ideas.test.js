@@ -39,6 +39,21 @@ test('a date inside an idea is left in the text rather than parsed away', () => 
   assert.equal(parsed.matched.date, null);
 });
 
+test('forceType keeps the date in the text, not just off the task', () => {
+  // The Ideas screen forces the type. If that happened after parsing, "on monday"
+  // would already have been cut out of the title — losing part of the thought.
+  const parsed = parseCapture('try the PEG series on monday', ctx({ forceType: 'idea' }));
+  assert.equal(parsed.type, 'idea');
+  assert.equal(parsed.due, null);
+  assert.match(parsed.title, /on monday/i);
+  assert.equal(parsed.matched.date, null, 'no date was consumed');
+});
+
+test('forceType still strips a spoken keyword', () => {
+  const parsed = parseCapture('idea try a shallower gradient', ctx({ forceType: 'idea' }));
+  assert.equal(parsed.title, 'Try a shallower gradient');
+});
+
 test('an ordinary task is unaffected by any of this', () => {
   const parsed = parseCapture('water GB005 tomorrow', ctx());
   assert.equal(parsed.type, 'task');

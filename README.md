@@ -194,7 +194,9 @@ guilt.
   accepted. `#idea` works too. Dictation will never produce "#idea", which is why the spoken
   keyword is accepted.
 - **No dates, ever.** Date parsing is skipped entirely for ideas, so "try the PEG series on
-  monday" keeps those words in the text instead of having them silently parsed away.
+  monday" keeps those words in the text instead of having them silently parsed away. The Ideas
+  screen passes `forceType: 'idea'` into the parser rather than overriding the type after the
+  fact — set afterwards, the date would already have been cut out of the title.
 - **No tag prompts.** An unknown experiment code inside an idea is left in the text rather
   than confirmed. Stopping to confirm would defeat capturing a thought in five seconds.
 - **Make a task** promotes an idea to a task due today, in one tap, with undo. That is two
