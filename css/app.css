@@ -496,7 +496,13 @@ button.quiet.glyph {
 }
 
 .dot-personal { background: var(--dot-personal); }
-.dot-default { background: var(--dot-default); }
+
+/* Hollow, not another brown: a filled sepia dot was too close to the ochre
+   project colour, and "no project" reads naturally as an unfilled ring. */
+.dot-default {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--dot-default);
+}
 .dot-p1 { background: var(--dot-p1); }
 .dot-p2 { background: var(--dot-p2); }
 .dot-p3 { background: var(--dot-p3); }
@@ -634,6 +640,8 @@ button.quiet.glyph {
 }
 
 .cal-pip.dot { box-shadow: none; }
+/* Keep the hollow ring visible at pip size. */
+.cal-pip.dot-default { box-shadow: inset 0 0 0 1.5px var(--dot-default); }
 .cal-pip.is-outside { box-shadow: none; }
 .cal-pip.is-today { box-shadow: 0 0 0 1.5px var(--accent); }
 
