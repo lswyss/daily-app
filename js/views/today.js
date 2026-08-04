@@ -29,6 +29,10 @@ export function groupForToday(tasks, today) {
   let laterCount = 0;
 
   for (const task of tasks) {
+    // Ideas never appear here, not even under "No date". They have no deadline and
+    // must not sit in a list that reads as things owed today.
+    if (task.type === 'idea' && !task.done) continue;
+
     if (task.done) {
       // Completed items leave the active list, but today's stay visible so the
       // day reads as progress and an accidental tap is still undoable.
@@ -90,6 +94,10 @@ export function groupForToday(tasks, today) {
  */
 export function needsConfirmation(parsed, today) {
   if (parsed.title === '') return 'no-title';
+  // An idea is never blocked on a tag. Nothing is attached unless the code is
+  // already known, so a misheard code just stays in the text — harmless, and
+  // stopping to confirm would defeat the point of capturing a thought fast.
+  if (parsed.type === 'idea') return null;
   if (parsed.experiment && parsed.experiment.status !== 'known') return 'experiment';
   if (parsed.project && parsed.project.status !== 'known') return 'project';
   if (parsed.due < today) return 'past-date';
@@ -289,6 +297,8 @@ export function renderToday({
   onDelete = () => {},
   onCancelEdit = () => {},
   onCalendar = () => {},
+  onIdeas = () => {},
+  ideaCount = 0,
 }) {
   const ctx = { today, editingId, onToggle, onOpen, onSaveEdit, onDelete, onCancelEdit };
   const view = document.createElement('div');
@@ -326,12 +336,40 @@ export function renderToday({
   calendar.setAttribute('aria-label', 'Calendar view');
   calendar.addEventListener('click', onCalendar);
 
+  // A bud, not a lightbulb: same idea, right dialect.
+  const ideas = document.createElement('button');
+  ideas.type = 'button';
+  ideas.className = 'quiet glyph';
+  ideas.innerHTML =
+    '<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4">' +
+    '<path d="M10 17.5V9"/>' +
+    '<path d="M10 9c0-3 1.6-5.4 4.4-6.4C14.7 5.7 13.2 8.4 10 9Z"/>' +
+    '<path d="M10 11.5c-2.6-.5-4-2.6-4-5 2.3.8 3.7 2.6 4 5Z"/></svg>';
+  ideas.title = 'Ideas';
+  ideas.setAttribute('aria-label', 'Ideas');
+  ideas.addEventListener('click', onIdeas);
+  if (ideaCount > 0) {
+    const count = document.createElement('span');
+    count.className = 'glyph-count';
+    count.textContent = String(ideaCount);
+    ideas.append(count);
+    ideas.setAttribute('aria-label', `Ideas, ${ideaCount} saved`);
+  }
+
+  // Settings becomes a glyph too: four controls plus the badge will not fit at
+  // 375px with two of them spelled out.
   const settings = document.createElement('button');
   settings.type = 'button';
-  settings.className = 'quiet icon';
-  settings.textContent = 'Settings';
+  settings.className = 'quiet glyph';
+  settings.innerHTML =
+    '<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4">' +
+    '<circle cx="10" cy="10" r="2.6"/>' +
+    '<path d="M10 2.6v2.2M10 15.2v2.2M2.6 10h2.2M15.2 10h2.2M4.8 4.8l1.6 1.6M13.6 13.6l1.6 1.6M15.2 4.8l-1.6 1.6M6.4 13.6l-1.6 1.6"/></svg>';
+  settings.title = 'Settings';
+  settings.setAttribute('aria-label', 'Settings');
   settings.addEventListener('click', onSettings);
-  controls.append(calendar, settings);
+
+  controls.append(ideas, calendar, settings);
 
   header.append(headings, controls);
   view.append(header);

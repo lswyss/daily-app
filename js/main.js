@@ -18,13 +18,21 @@ import {
   mutation,
   parseState,
 } from './store.js';
-import { FLUSH_DEBOUNCE_MS, createDebouncer, createFlushQueue, pushMutations } from './sync.js';
-import { todayIso } from './parse.js';
+import {
+  FLUSH_DEBOUNCE_MS,
+  createDebouncer,
+  createFlushQueue,
+  planInboxDrain,
+  pushMutations,
+} from './sync.js';
+import { newTaskId, parseCapture, toTask, todayIso } from './parse.js';
+import { needsConfirmation } from './views/today.js';
 import { normaliseAnchor } from './calendar.js';
 import { syncBadge } from './components/syncbadge.js';
 import { renderSetup } from './views/setup.js';
 import { renderToday } from './views/today.js';
 import { renderCalendar } from './views/calendar.js';
+import { groupIdeas, renderIdeas } from './views/ideas.js';
 
 const root = /** @type {HTMLElement} */ (document.getElementById('view'));
 const flashEl = /** @type {HTMLElement} */ (document.getElementById('flash'));
@@ -41,6 +49,7 @@ const app = {
   status: 'synced',
   lastSyncedAt: null,
   draft: '',
+  ideaDraft: '',
   upcomingOpen: false,
   editingId: null,
   loading: false,
@@ -213,6 +222,111 @@ async function reload() {
     app.loading = false;
     render();
   }
+
+  // Pick up anything dictated since the app was last open.
+  if (!app.loadError) void drainInbox({ force: true });
+}
+
+// ---------------------------------------------------------- inbox drain
+
+/** Don't re-list the inbox on every glance back at the app. */
+const DRAIN_COOLDOWN_MS = 60_000;
+let lastDrainAt = 0;
+
+/**
+ * Decide what one dictated capture means.
+ *
+ * The Shortcut declares `"type": "idea"`, so the common path needs no guessing.
+ * Anything else that cannot be filed confidently is imported **as an idea** rather
+ * than dropped or guessed into a dated task — an idea is the harmless resting
+ * place, it is visible in the Ideas list, and it can be promoted in one tap.
+ */
+function interpretCapture(capture, id) {
+  const parsed = parseCapture(capture.raw, {
+    today: todayIso(),
+    projects: app.local.projects ?? [],
+    experiments: (app.local.experiments ?? []).map((e) => e.id),
+  });
+
+  const decisions = {
+    id,
+    source: capture.source === 'app' ? 'app' : 'shortcut',
+    now: capture.capturedAt,
+  };
+
+  const wantsIdea = capture.type === 'idea' || parsed.type === 'idea';
+  if (wantsIdea || needsConfirmation(parsed, todayIso())) {
+    return { task: toTask({ ...parsed, type: 'idea', due: null }, decisions) };
+  }
+  return { task: toTask(parsed, decisions) };
+}
+
+/**
+ * Import everything sitting in `inbox/`, then delete the files we imported.
+ *
+ * Write first, delete second. Deleting first would lose the capture from the
+ * inbox if the write then failed. Files we could not read are left in place
+ * rather than quietly discarded.
+ */
+async function drainInbox({ force = false } = {}) {
+  if (!app.client) return;
+  if (!force && Date.now() - lastDrainAt < DRAIN_COOLDOWN_MS) return;
+  lastDrainAt = Date.now();
+
+  let files;
+  try {
+    files = await app.client.listDir('inbox');
+  } catch {
+    return; // Offline or unreachable; the next drain will pick it up.
+  }
+  if (files.length === 0) return;
+
+  const plan = await planInboxDrain({
+    files,
+    readCapture: async (file) => {
+      const blob = await app.client.readFile(file.path);
+      return blob ? JSON.parse(blob.content) : null;
+    },
+    interpret: interpretCapture,
+  });
+
+  if (plan.mutations.length === 0) {
+    if (plan.unreadable.length > 0) {
+      flash(`${plan.unreadable.length} capture(s) could not be read. Left in the inbox.`, 'bad');
+    }
+    return;
+  }
+
+  const imported = new Set(plan.mutations.map((m) => m.id));
+  for (const m of plan.mutations) commit(m);
+
+  await flushQueue.request();
+
+  // Only clear the inbox once the import is genuinely on GitHub.
+  if (!log.isEmpty() || app.status !== 'synced') {
+    flash(`${plan.mutations.length} capture(s) imported but not yet saved.`, 'bad');
+    return;
+  }
+
+  for (const file of files) {
+    const id = plan.mutations.find((m) => imported.has(m.id) && file.path.includes(m.id.replace('t_inbox_', '')));
+    if (!id) continue;
+    try {
+      await app.client.deleteFile({
+        path: file.path,
+        sha: file.sha,
+        message: `drain: ${file.name}`,
+      });
+    } catch {
+      // The task is saved; a stuck inbox file is harmless because re-importing
+      // it produces the same id and is a no-op.
+    }
+  }
+
+  flash(`Imported ${plan.mutations.length} capture(s).`);
+  if (plan.unreadable.length > 0) {
+    flash(`${plan.unreadable.length} capture(s) could not be read. Left in the inbox.`, 'bad');
+  }
 }
 
 // --------------------------------------------------------------- render
@@ -286,6 +400,34 @@ function render() {
     },
   };
 
+  if (app.view === 'ideas') {
+    root.replaceChildren(
+      renderIdeas({
+        state: app.local,
+        today: todayIso(),
+        badge,
+        draft: app.ideaDraft,
+        onDraft: (value) => {
+          app.ideaDraft = value;
+        },
+        editingId: app.editingId,
+        onOpen: listCtx.onOpen,
+        onSaveEdit: handleSaveEdit,
+        onDelete: handleDelete,
+        onCancelEdit: listCtx.onCancelEdit,
+        onAdd: handleAddIdea,
+        onPromote: handlePromote,
+        onArchive: handleArchiveIdea,
+        onBack: () => {
+          app.view = 'today';
+          app.editingId = null;
+          render();
+        },
+      }),
+    );
+    return;
+  }
+
   if (app.view === 'calendar') {
     root.replaceChildren(
       renderCalendar({
@@ -336,6 +478,12 @@ function render() {
       ...listCtx,
       onAdd: handleAdd,
       onSettings: showSettings,
+      ideaCount: groupIdeas(app.local.tasks ?? []).open.length,
+      onIdeas: () => {
+        app.view = 'ideas';
+        app.editingId = null;
+        render();
+      },
       onCalendar: () => {
         app.view = 'calendar';
         app.editingId = null;
@@ -407,6 +555,45 @@ function handleDelete(id) {
   }
 }
 
+function handleAddIdea(idea) {
+  commit(mutation('add', idea.id, idea));
+  toast(`Saved “${idea.title}”`, {
+    label: 'Undo',
+    onAction: () => commit(mutation('delete', idea.id)),
+  });
+}
+
+/**
+ * Turn an idea into a task due today.
+ *
+ * Two mutations rather than one: the type change is an `edit` and the date is a
+ * `reschedule`, so `git log` shows both for what they are.
+ */
+function handlePromote(id) {
+  const idea = app.local.tasks.find((t) => t.id === id);
+  if (!idea) return;
+
+  commit(mutation('edit', id, { type: 'task' }));
+  commit(mutation('reschedule', id, { due: todayIso() }));
+
+  app.view = 'today';
+  render();
+  toast(`“${idea.title}” is now a task for today`, {
+    label: 'Undo',
+    onAction: () => {
+      commit(mutation('edit', id, { type: 'idea' }));
+      commit(mutation('reschedule', id, { due: null }));
+    },
+  });
+}
+
+/** Archive keeps the idea and its history; it is `done`, not deleted. */
+function handleArchiveIdea(id) {
+  const idea = app.local.tasks.find((t) => t.id === id);
+  if (!idea) return;
+  commit(mutation(idea.done ? 'uncomplete' : 'complete', id));
+}
+
 function handleAdd(task) {
   commit(mutation('add', task.id, task));
   // Most captures now skip the confirm step, so the toast is the feedback that
@@ -438,6 +625,8 @@ function boot() {
 // one on iOS; `beforeunload` is not.
 globalThis.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden' && !log.isEmpty()) debouncer.flushNow();
+  // Coming back to the app is exactly when a dictated idea should appear.
+  if (document.visibilityState === 'visible') void drainInbox();
 });
 globalThis.addEventListener('pagehide', () => {
   if (!log.isEmpty()) debouncer.flushNow();

@@ -245,6 +245,12 @@ export function assertMutation(m) {
         value: m.payload.due,
       });
     }
+    if ('type' in m.payload && !TYPES.includes(m.payload.type)) {
+      throw new ValidationError(`edit payload.type must be one of ${TYPES.join(' | ')}`, {
+        field: 'payload.type',
+        value: m.payload.type,
+      });
+    }
     if ('scope' in m.payload && !SCOPES.includes(m.payload.scope)) {
       throw new ValidationError(`edit payload.scope must be one of ${SCOPES.join(' | ')}`, {
         field: 'payload.scope',

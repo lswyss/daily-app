@@ -330,6 +330,15 @@ export function parseCapture(raw, context = {}) {
     type = typeMatch[1].toLowerCase();
     matched.type = typeMatch[0];
     working = working.replace(typeMatch[0], ' ');
+  } else {
+    // Dictation will never say "hashtag idea". A leading "idea" or "thought" is
+    // how a person actually starts one out loud, so accept that too.
+    const spoken = working.match(/^\s*(idea|thought)\b\s*[:,-]?\s+/i);
+    if (spoken) {
+      type = 'idea';
+      matched.type = spoken[1].toLowerCase();
+      working = working.slice(spoken[0].length);
+    }
   }
 
   // --- explicit tags ----------------------------------------------------
@@ -352,16 +361,23 @@ export function parseCapture(raw, context = {}) {
   }
 
   // --- date -------------------------------------------------------------
-  const found = findDate(working, today);
-  let due = today;
-  let dueAssumed = true;
-  if (found) {
-    due = found.due;
-    dueAssumed = false;
-    matched.date = found.phrase;
-    working = working.replace(found.matched, ' ');
-    if (due < today) {
-      notes.push(`That date (${due}) is in the past.`);
+  // Ideas are undated by definition — they are not owed to anyone on a day. Date
+  // parsing is skipped entirely rather than parsed and thrown away, so a phrase
+  // like "try PEG on monday" survives intact in the text.
+  const isIdea = type === 'idea';
+  let due = isIdea ? null : today;
+  let dueAssumed = !isIdea;
+
+  if (!isIdea) {
+    const found = findDate(working, today);
+    if (found) {
+      due = found.due;
+      dueAssumed = false;
+      matched.date = found.phrase;
+      working = working.replace(found.matched, ' ');
+      if (due < today) {
+        notes.push(`That date (${due}) is in the past.`);
+      }
     }
   }
 
@@ -394,7 +410,8 @@ export function parseCapture(raw, context = {}) {
   if (project?.status === 'near') {
     notes.push(`${project.value} is close to ${project.suggestions.join(', ')} — confirm which you meant.`);
   }
-  if (dueAssumed) notes.push('No date heard, so this is filed under today.');
+  if (isIdea) notes.push('Filed as an idea, with no date.');
+  else if (dueAssumed) notes.push('No date heard, so this is filed under today.');
   if (!title) notes.push('No title left after parsing — say what the task is.');
 
   return {

@@ -24,6 +24,7 @@
 <script type="module">
 import { renderToday } from '../js/views/today.js';
 import { renderCalendar } from '../js/views/calendar.js';
+import { renderIdeas, groupIdeas } from '../js/views/ideas.js';
 import { syncBadge } from '../js/components/syncbadge.js';
 import { normaliseAnchor } from '../js/calendar.js';
 
@@ -72,6 +73,12 @@ const state = {
     t('Harvest GB005', '2026-08-12', { project: 'Globot', experiment: 'GB005' }),
     t('Conference abstract deadline', '2026-08-28', { project: 'Root Atlas' }),
     t('Reread the Zhu paper', null),
+
+    // Ideas: undated, never shown in Today.
+    t('Try a shallower PEG gradient, maybe 0.4 MPa', null, { type: 'idea', project: 'PEG Treatment' }),
+    t('Ask Ana whether the scanner can do 1200 dpi', null, { type: 'idea' }),
+    t('Root angle might correlate with recovery rate', null, { type: 'idea', project: 'Root Atlas' }),
+    t('Old idea we already dealt with', null, { type: 'idea', done: true, completedAt: '2026-08-02T10:00:00Z' }),
   ],
 };
 
@@ -97,7 +104,16 @@ function listCtx() {
 
 function draw() {
   const badge = syncBadge({ status: 'synced', pending: 0, lastSyncedAt: `${TODAY}T09:14:00Z` });
-  const node = ui.view === 'calendar'
+  const node = ui.view === 'ideas'
+    ? renderIdeas({
+        state, today: TODAY, badge, ...listCtx(),
+        draft: '', onDraft: () => {},
+        onAdd: (x) => console.log('add idea', x),
+        onPromote: (id) => console.log('promote', id),
+        onArchive: (id) => console.log('archive', id),
+        onBack: () => { ui.view = 'today'; draw(); },
+      })
+    : ui.view === 'calendar'
     ? renderCalendar({
         state, today: TODAY, zoom: ui.zoom, anchor: ui.anchor, selected: ui.selected,
         badge, listCtx: listCtx(),
@@ -113,6 +129,8 @@ function draw() {
         onAdd: (x) => console.log('add', x),
         onSettings: () => console.log('settings'),
         onCalendar: () => { ui.view = 'calendar'; draw(); },
+        onIdeas: () => { ui.view = 'ideas'; draw(); },
+        ideaCount: groupIdeas(state.tasks).open.length,
       });
   document.getElementById('view').replaceChildren(node);
 }
