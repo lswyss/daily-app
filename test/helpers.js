@@ -135,6 +135,21 @@ export function manualTimers() {
   };
 }
 
+/**
+ * An ISO timestamp for a given **local** wall-clock time.
+ *
+ * Use this for `completedAt` in tests. A hardcoded `…T17:00:00Z` names a different
+ * local day depending on the machine's timezone, so assertions about "which day
+ * was this done on" pass in California and fail in Kiritimati. Building from local
+ * time makes the intended day unambiguous everywhere.
+ *
+ * @param {number} year @param {number} month 1-12 @param {number} day
+ * @param {number} [hour] @param {number} [minute]
+ */
+export function localAt(year, month, day, hour = 12, minute = 0) {
+  return new Date(year, month - 1, day, hour, minute, 0).toISOString();
+}
+
 /** A minimal valid data.json body. */
 export function seedState(overrides = {}) {
   return {

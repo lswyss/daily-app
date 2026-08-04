@@ -142,6 +142,9 @@ These are the properties worth breaking a build over. Each has a named test.
   and must be tapped. `E012` against a known `E0013_PegTreatment` prompts — edit distance
   alone misses that pair, so the leading letter-and-number code is compared separately.
 - Relative dates resolve to absolute ISO at entry. The store never holds "tomorrow".
+- Any question of the form "which day did this happen on" goes through `localDateOf`, never a
+  string slice of `completedAt`. Tests build `completedAt` from local wall-clock time with the
+  `localAt` helper and pass in timezones both east and west of UTC.
 - Date maths runs in UTC on ISO strings, so a daylight-saving boundary cannot shift a due
   date, while "today" is computed from the *local* calendar date.
 
@@ -195,9 +198,14 @@ pinch: pinch is undiscoverable and unusable from a keyboard):
 | **Month** | A grid of coloured dots per day. Tap a day to list it below the grid; tap again to close. |
 | **Year** | Twelve mini-months as density pips. Tap a month name to drill into it. |
 
-Tasks are placed on their **due** date, including completed ones — a task due Monday and
-ticked off on Tuesday belongs on Monday, the way a calendar normally reads. When it was
-actually *done* is the archive's business (phase 8), not the calendar's.
+**Open tasks sit on their due date. Finished tasks sit on the day they were actually
+finished.** A task due Monday and ticked off on Wednesday appears on Wednesday, because the
+calendar is a record of when work happened, not of what was planned. When the two differ the
+row keeps both — "done today · due Jul 28" — so moving it does not hide that it slipped.
+
+The completion day is derived from `completedAt` in **local** time via `localDateOf`. The
+stored timestamp is UTC, so slicing it would file anything done after about 5pm Pacific under
+tomorrow.
 
 Editing works identically here and on Today: the box completes, the text opens the same
 inline editor. Both views share `components/tasklist.js` so they cannot drift apart.
@@ -500,3 +508,13 @@ walking to lab was a founding goal, and everything currently has to be typed int
   Note this partly overlaps phases 6 and 8 — the week zoom supersedes the planned week view,
   and the calendar answers some of what the archive was for, but not "when did I last do X",
   which still needs search.
+- **2026-08-04** — Completed tasks now sit on the day they were **finished**, not their due
+  date, by request: the calendar should record what happened. This exposed a pre-existing bug
+  in the Today view — `completedAt?.slice(0, 10)` compared a UTC date against a local one, so
+  anything ticked off after roughly 5pm Pacific counted as tomorrow and silently dropped out
+  of "Done today". Both now go through `localDateOf`. Row labels changed to match: a finished
+  task reads "done today" rather than "3 days overdue", which would have contradicted its own
+  position in the grid, and keeps "· due Jul 28" when the dates differ so lateness is not lost.
+  Three tests were also fixed: they used hardcoded UTC-afternoon timestamps whose *local* day
+  differs at UTC+14, so they passed in California and failed in Kiritimati. The suite now runs
+  clean in five timezones.

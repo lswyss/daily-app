@@ -12,7 +12,7 @@
 
 import {
   ZOOMS,
-  bucketByDue,
+  bucketByDate,
   monthGrid,
   periodLabel,
   rangeOf,
@@ -243,7 +243,7 @@ export function renderCalendar({
   view.className = 'calendar';
 
   const projects = state.projects ?? [];
-  const { byDate, undated } = bucketByDue(state.tasks ?? []);
+  const { byDate, undated } = bucketByDate(state.tasks ?? []);
   const ctx = { ...listCtx, today };
 
   // ---- header ----------------------------------------------------------

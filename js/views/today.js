@@ -7,7 +7,7 @@
  * @module views/today
  */
 
-import { parseCapture, toTask, newTaskId, todayIso } from '../parse.js';
+import { localDateOf, parseCapture, toTask, newTaskId, todayIso } from '../parse.js';
 import { dayHeading } from '../components/taskrow.js';
 import { taskList } from '../components/tasklist.js';
 
@@ -32,7 +32,9 @@ export function groupForToday(tasks, today) {
     if (task.done) {
       // Completed items leave the active list, but today's stay visible so the
       // day reads as progress and an accidental tap is still undoable.
-      if (task.completedAt?.slice(0, 10) === today) doneToday.push(task);
+      // localDateOf, not a slice: completedAt is UTC, so anything ticked off in
+      // the evening would otherwise count as tomorrow and vanish from here.
+      if (localDateOf(task.completedAt) === today) doneToday.push(task);
       continue;
     }
     if (!task.due) {

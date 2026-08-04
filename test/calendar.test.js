@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import {
   addMonths,
   addYears,
-  bucketByDue,
+  bucketByDate,
+  placementDate,
   daysInMonth,
   endOfMonth,
   monthGrid,
@@ -20,7 +21,7 @@ import {
 } from '../js/calendar.js';
 
 import { dotClass, dominantDotClass, dotsFor, legendFor, PROJECT_SLOTS } from '../js/color.js';
-import { seedTask } from './helpers.js';
+import { localAt, seedTask } from './helpers.js';
 
 // 2026-07-31 is a Friday.
 const TODAY = '2026-07-31';
@@ -139,23 +140,61 @@ test('period labels read like dates, not ISO strings', () => {
 
 // -------------------------------------------------------------- bucketing
 
-test('tasks bucket onto their due date, completed ones included', () => {
+test('open tasks sit on their due date', () => {
   const tasks = [
     seedTask({ id: 'a', due: '2026-08-03', createdAt: '2026-07-31T09:00:00Z' }),
     seedTask({ id: 'b', due: '2026-08-03', createdAt: '2026-07-31T08:00:00Z' }),
-    seedTask({ id: 'c', due: '2026-08-04', done: true, completedAt: '2026-08-05T10:00:00Z' }),
     seedTask({ id: 'd', due: null }),
   ];
 
-  const { byDate, undated } = bucketByDue(tasks);
+  const { byDate, undated } = bucketByDate(tasks);
 
   assert.deepEqual(byDate.get('2026-08-03').map((t) => t.id), ['b', 'a'], 'sorted by creation');
-  assert.deepEqual(
-    byDate.get('2026-08-04').map((t) => t.id),
-    ['c'],
-    'placed on its due date, not the day it was ticked off',
-  );
   assert.deepEqual(undated.map((t) => t.id), ['d'], 'undated tasks are kept, not dropped');
+});
+
+test('a finished task sits on the day it was finished, not when it was due', () => {
+  // Due the 4th, actually done on the 6th. The calendar must record the 6th.
+  const late = seedTask({
+    id: 'late',
+    due: '2026-08-04',
+    done: true,
+    completedAt: localAt(2026, 8, 6, 17),
+  });
+  assert.equal(placementDate(late), '2026-08-06');
+
+  const { byDate } = bucketByDate([late]);
+  assert.equal(byDate.has('2026-08-04'), false, 'not on its due date');
+  assert.deepEqual(byDate.get('2026-08-06').map((t) => t.id), ['late']);
+});
+
+test('a task finished early moves back to the day it was finished', () => {
+  const early = seedTask({
+    id: 'early',
+    due: '2026-08-20',
+    done: true,
+    completedAt: localAt(2026, 8, 4, 15),
+  });
+  assert.equal(placementDate(early), '2026-08-04');
+});
+
+test('the completion day is the LOCAL day, not the UTC one', () => {
+  // 6:30pm local on 4 August. In any timezone behind UTC the stored timestamp
+  // reads as the 5th, and a naive slice would file the work under tomorrow.
+  const evening = localAt(2026, 8, 4, 18, 30);
+  const task = seedTask({ id: 'evening', due: '2026-08-04', done: true, completedAt: evening });
+
+  assert.equal(placementDate(task), '2026-08-04');
+});
+
+test('a task done without a timestamp still lands somewhere', () => {
+  // Should not happen, but silently vanishing from the calendar would be worse.
+  const orphan = seedTask({ id: 'o', due: '2026-08-04', done: true, completedAt: null });
+  assert.equal(placementDate(orphan), '2026-08-04');
+
+  const nowhere = seedTask({ id: 'n', due: null, done: true, completedAt: null });
+  assert.equal(placementDate(nowhere), null);
+  assert.deepEqual(bucketByDate([nowhere]).undated.map((t) => t.id), ['n']);
 });
 
 // ----------------------------------------------------------------- colour

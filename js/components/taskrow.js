@@ -5,7 +5,7 @@
  * @module components/taskrow
  */
 
-import { daysBetween } from '../parse.js';
+import { daysBetween, localDateOf } from '../parse.js';
 
 /**
  * Human date for the metadata line. Relative wording is fine *here* — this is
@@ -36,6 +36,40 @@ export function dueLabel(due, today) {
   });
 }
 
+/** A compact absolute date: "Aug 2". */
+export function shortDate(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+/**
+ * What the date part of a row says.
+ *
+ * A finished task reports when it was **finished**, because that is the day it now
+ * sits on in the calendar — reading "3 days overdue" on a task filed under the day
+ * you actually did it would contradict its own position.
+ *
+ * When the two dates differ the original due date is kept alongside, so moving a
+ * completed task to its completion day does not lose the fact that it was late.
+ *
+ * @param {object} task
+ * @param {string} today
+ * @returns {string}
+ */
+export function statusLabel(task, today) {
+  if (!task.done) return dueLabel(task.due, today);
+
+  const doneOn = localDateOf(task.completedAt);
+  if (!doneOn) return task.due ? `done · due ${shortDate(task.due)}` : 'done';
+
+  const base = `done ${dueLabel(doneOn, today)}`;
+  return task.due && task.due !== doneOn ? `${base} · due ${shortDate(task.due)}` : base;
+}
+
 /**
  * A heading for a day in the upcoming list: "Tomorrow · 1 Aug".
  * The relative word carries the meaning; the date removes the ambiguity.
@@ -62,7 +96,7 @@ export function dayHeading(due, today) {
  * @returns {string}
  */
 export function metaLine(task, today) {
-  return [task.project, task.experiment, dueLabel(task.due, today)]
+  return [task.project, task.experiment, statusLabel(task, today)]
     .filter(Boolean)
     .join(' · ');
 }
@@ -120,7 +154,7 @@ export function taskRow({ task, today, onToggle, onOpen }) {
   meta.className = 'meta task-meta';
   const due = document.createElement('span');
   due.className = 'task-due';
-  due.textContent = dueLabel(task.due, today);
+  due.textContent = statusLabel(task, today);
   meta.append(document.createTextNode(metaPrefix(task)), due);
 
   open.append(title, meta);

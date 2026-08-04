@@ -9,7 +9,7 @@
  * @module calendar
  */
 
-import { addDays, weekdayOf } from './parse.js';
+import { addDays, localDateOf, weekdayOf } from './parse.js';
 
 /** Monday. Lab weeks start Monday, and ISO agrees. */
 export const WEEK_STARTS_ON = 1;
@@ -158,29 +158,47 @@ export function rangeOf(zoom, iso) {
 }
 
 /**
- * Group tasks by the date they sit on.
+ * The day a task belongs on in the calendar.
  *
- * Placement is by `due`, including for completed tasks — a task due Monday and
- * ticked off on Tuesday belongs on Monday, the way a calendar normally reads.
- * `completedAt` is the archive's business, not the calendar's.
+ * A finished task sits on the day it was **actually finished**, not the day it was
+ * due. This app is a record of when experiments happened, so the calendar has to
+ * answer "what did I do on the 4th", not "what was I supposed to do".
  *
- * Undated tasks are returned separately rather than dropped.
+ * The completion day is derived from `completedAt` in **local** time — see
+ * `localDateOf`, because the stored timestamp is UTC and an evening completion
+ * would otherwise land on tomorrow.
+ *
+ * Falls back to `due` if a task is somehow done without a timestamp, so nothing
+ * silently disappears from the calendar.
+ *
+ * @param {{done?: boolean, completedAt?: string|null, due?: string|null}} task
+ * @returns {string|null}
+ */
+export function placementDate(task) {
+  if (task.done) return localDateOf(task.completedAt) ?? task.due ?? null;
+  return task.due ?? null;
+}
+
+/**
+ * Group tasks by the date they sit on. Undated tasks are returned separately
+ * rather than dropped.
  *
  * @param {object[]} tasks
  * @returns {{byDate: Map<string, object[]>, undated: object[]}}
  */
-export function bucketByDue(tasks) {
+export function bucketByDate(tasks) {
   /** @type {Map<string, object[]>} */
   const byDate = new Map();
   const undated = [];
 
   for (const task of tasks) {
-    if (!task.due) {
+    const day = placementDate(task);
+    if (!day) {
       undated.push(task);
       continue;
     }
-    if (!byDate.has(task.due)) byDate.set(task.due, []);
-    byDate.get(task.due).push(task);
+    if (!byDate.has(day)) byDate.set(day, []);
+    byDate.get(day).push(task);
   }
 
   const byCreated = (a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? '');

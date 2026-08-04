@@ -30,6 +30,24 @@ export function todayIso(date = new Date()) {
 }
 
 /**
+ * The **local** calendar date an instant fell on.
+ *
+ * `completedAt` is a UTC timestamp, so slicing the first ten characters off it is
+ * wrong: ticking something off at 6:30pm in California stores `…T01:30:00Z` the
+ * following day, and the slice would file the work under tomorrow. Anything that
+ * asks "which day did this happen on" must come through here.
+ *
+ * @param {string|null|undefined} timestamp
+ * @returns {string|null} ISO date, or null if there is nothing usable.
+ */
+export function localDateOf(timestamp) {
+  if (!timestamp) return null;
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return null;
+  return todayIso(date);
+}
+
+/**
  * Add days to an ISO date. Done in UTC so daylight saving cannot shift the result.
  * @param {string} iso
  * @param {number} days

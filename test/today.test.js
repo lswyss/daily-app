@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 
 import { groupForToday, needsConfirmation } from '../js/views/today.js';
 import { parseCapture } from '../js/parse.js';
-import { dueLabel, dayHeading, metaLine } from '../js/components/taskrow.js';
+import { dueLabel, dayHeading, metaLine, statusLabel } from '../js/components/taskrow.js';
+import { localDateOf } from '../js/parse.js';
 import { badgeState } from '../js/components/syncbadge.js';
-import { seedTask } from './helpers.js';
+import { localAt, seedTask } from './helpers.js';
 
 const TODAY = '2026-07-31';
 
@@ -48,6 +49,40 @@ test('completed tasks leave the active groups', () => {
 
   assert.deepEqual(groups.lab.map((t) => t.id), ['b']);
   assert.deepEqual(groups.doneToday.map((t) => t.id), ['a'], 'but today\'s stay visible for undo');
+});
+
+test('something ticked off in the evening still counts as done today', () => {
+  // completedAt is UTC, so a 6:30pm local completion stores tomorrow's date in
+  // timezones behind UTC. Slicing it would drop the task out of Done today.
+  const evening = localAt(2026, 7, 31, 18, 30);
+  const groups = groupForToday(
+    [seedTask({ id: 'a', due: TODAY, done: true, completedAt: evening })],
+    TODAY,
+  );
+  assert.deepEqual(groups.doneToday.map((t) => t.id), ['a']);
+});
+
+test('localDateOf reports the local day of an instant', () => {
+  const evening = localAt(2026, 7, 31, 23, 45);
+  assert.equal(localDateOf(evening), '2026-07-31');
+  assert.equal(localDateOf(null), null);
+  assert.equal(localDateOf('not a date'), null);
+});
+
+test('a finished task reports when it was finished, keeping the due date if it slipped', () => {
+  const onTime = seedTask({ done: true, due: TODAY, completedAt: localAt(2026, 7, 31, 12) });
+  assert.equal(statusLabel(onTime, TODAY), 'done today');
+
+  // Due the 28th, done the 31st: the row must not claim to be overdue, but the
+  // slip should still be visible.
+  const late = seedTask({ done: true, due: '2026-07-28', completedAt: localAt(2026, 7, 31, 12) });
+  const label = statusLabel(late, TODAY);
+  assert.match(label, /^done today/);
+  assert.match(label, /due Jul 28/);
+  assert.doesNotMatch(label, /overdue/);
+
+  const open = seedTask({ done: false, due: '2026-07-28' });
+  assert.equal(statusLabel(open, TODAY), '3 days overdue');
 });
 
 test('tasks completed on an earlier day are gone entirely', () => {
