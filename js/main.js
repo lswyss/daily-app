@@ -20,9 +20,11 @@ import {
 } from './store.js';
 import { FLUSH_DEBOUNCE_MS, createDebouncer, createFlushQueue, pushMutations } from './sync.js';
 import { todayIso } from './parse.js';
+import { normaliseAnchor } from './calendar.js';
 import { syncBadge } from './components/syncbadge.js';
 import { renderSetup } from './views/setup.js';
 import { renderToday } from './views/today.js';
+import { renderCalendar } from './views/calendar.js';
 
 const root = /** @type {HTMLElement} */ (document.getElementById('view'));
 const flashEl = /** @type {HTMLElement} */ (document.getElementById('flash'));
@@ -43,6 +45,11 @@ const app = {
   editingId: null,
   loading: false,
   loadError: null,
+  // Always opens on Today. The calendar is somewhere you go, not where you land.
+  view: 'today',
+  zoom: 'month',
+  anchor: normaliseAnchor('month', todayIso()),
+  selectedDay: todayIso(),
 };
 
 const log = createMutationLog({
@@ -262,6 +269,57 @@ function render() {
     onClick: () => void debouncer.flushNow(),
   });
 
+  // Editing works identically in both views, so the callbacks are shared.
+  const listCtx = {
+    editingId: app.editingId,
+    onToggle: handleToggle,
+    onOpen: (id) => {
+      app.editingId = id;
+      hideToast();
+      render();
+    },
+    onSaveEdit: handleSaveEdit,
+    onDelete: handleDelete,
+    onCancelEdit: () => {
+      app.editingId = null;
+      render();
+    },
+  };
+
+  if (app.view === 'calendar') {
+    root.replaceChildren(
+      renderCalendar({
+        state: app.local,
+        today: todayIso(),
+        zoom: app.zoom,
+        anchor: app.anchor,
+        selected: app.selectedDay,
+        badge,
+        listCtx,
+        onZoom: (zoom, target) => {
+          app.zoom = zoom;
+          app.anchor = normaliseAnchor(zoom, target ?? app.anchor);
+          render();
+        },
+        onAnchor: (anchor) => {
+          app.anchor = normaliseAnchor(app.zoom, anchor);
+          render();
+        },
+        onSelectDay: (iso) => {
+          // Tapping the selected day again closes the panel.
+          app.selectedDay = app.selectedDay === iso ? null : iso;
+          render();
+        },
+        onBack: () => {
+          app.view = 'today';
+          app.editingId = null;
+          render();
+        },
+      }),
+    );
+    return;
+  }
+
   root.replaceChildren(
     renderToday({
       state: app.local,
@@ -275,21 +333,17 @@ function render() {
       onUpcomingToggle: (open) => {
         app.upcomingOpen = open;
       },
-      editingId: app.editingId,
-      onOpen: (id) => {
-        app.editingId = id;
-        hideToast();
-        render();
-      },
-      onCancelEdit: () => {
-        app.editingId = null;
-        render();
-      },
-      onSaveEdit: handleSaveEdit,
-      onDelete: handleDelete,
-      onToggle: handleToggle,
+      ...listCtx,
       onAdd: handleAdd,
       onSettings: showSettings,
+      onCalendar: () => {
+        app.view = 'calendar';
+        app.editingId = null;
+        // Land on the period containing today, whatever was last looked at.
+        app.anchor = normaliseAnchor(app.zoom, todayIso());
+        app.selectedDay = todayIso();
+        render();
+      },
     }),
   );
 }

@@ -18,6 +18,18 @@
   /* Touch targets never go below 44px. */
   --tap: 44px;
   --rule-width: 1px;
+
+  /* Calendar dot palette. The calendar needs more colour than the rest of the
+     app to tell projects apart, so these are deliberately desaturated — field
+     notebook inks, not highlighter pens. Personal is fixed and never reused. */
+  --dot-personal: #6E5F86;
+  --dot-default: #8A7F6B;
+  --dot-p1: #5E7355;
+  --dot-p2: #8A6D3B;
+  --dot-p3: #4F6B72;
+  --dot-p4: #7D5A6B;
+  --dot-p5: #47695C;
+  --dot-p6: #8A5A44;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -29,6 +41,16 @@
     --sepia: #9A927F;
     --rule: #33372E;
     --overdue: #C0705F;
+
+    /* Lifted for contrast against the dark ground, same hues. */
+    --dot-personal: #A896C4;
+    --dot-default: #A79B84;
+    --dot-p1: #8FA882;
+    --dot-p2: #C2A163;
+    --dot-p3: #79A3AC;
+    --dot-p4: #B98CA1;
+    --dot-p5: #6FA292;
+    --dot-p6: #C68B70;
   }
 }
 

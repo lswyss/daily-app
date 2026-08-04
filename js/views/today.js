@@ -8,8 +8,8 @@
  */
 
 import { parseCapture, toTask, newTaskId, todayIso } from '../parse.js';
-import { taskRow, dayHeading } from '../components/taskrow.js';
-import { taskEditor } from '../components/taskeditor.js';
+import { dayHeading } from '../components/taskrow.js';
+import { taskList } from '../components/tasklist.js';
 
 /**
  * Split tasks into the groups the view renders. Pure, so it is unit-tested.
@@ -105,23 +105,6 @@ function headerDate(today) {
   });
 }
 
-/**
- * Render one task as either a row or, if it is the one being edited, an editor.
- * @param {object} task
- * @param {object} ctx
- */
-function rowOrEditor(task, ctx) {
-  if (ctx.editingId === task.id) {
-    return taskEditor({
-      task,
-      onSave: ctx.onSaveEdit,
-      onDelete: ctx.onDelete,
-      onCancel: ctx.onCancelEdit,
-    });
-  }
-  return taskRow({ task, today: ctx.today, onToggle: ctx.onToggle, onOpen: ctx.onOpen });
-}
-
 /** @param {string} title @param {object[]} tasks @param {object} ctx */
 function taskGroup(title, tasks, ctx, tone = '') {
   if (tasks.length === 0) return null;
@@ -133,11 +116,7 @@ function taskGroup(title, tasks, ctx, tone = '') {
   heading.className = 'meta group-title';
   heading.textContent = `${title} · ${tasks.length}`;
 
-  const list = document.createElement('ul');
-  list.className = 'tasks';
-  for (const task of tasks) list.append(rowOrEditor(task, ctx));
-
-  section.append(heading, list);
+  section.append(heading, taskList(tasks, ctx));
   return section;
 }
 
@@ -307,6 +286,7 @@ export function renderToday({
   onSaveEdit = () => {},
   onDelete = () => {},
   onCancelEdit = () => {},
+  onCalendar = () => {},
 }) {
   const ctx = { today, editingId, onToggle, onOpen, onSaveEdit, onDelete, onCancelEdit };
   const view = document.createElement('div');
@@ -328,12 +308,28 @@ export function renderToday({
   controls.className = 'today-controls';
   if (badge) controls.append(badge);
 
+  // A glyph rather than a word: the header is already busy, and this is the one
+  // control that needs to be reachable without reading.
+  const calendar = document.createElement('button');
+  calendar.type = 'button';
+  calendar.className = 'quiet glyph';
+  calendar.innerHTML =
+    '<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4">' +
+    '<rect x="2.5" y="4" width="15" height="13" rx="1.5"/><path d="M2.5 8h15"/>' +
+    '<path d="M6.5 2.5v3M13.5 2.5v3"/>' +
+    '<circle cx="7" cy="11.5" r="1" fill="currentColor" stroke="none"/>' +
+    '<circle cx="10.5" cy="11.5" r="1" fill="currentColor" stroke="none"/>' +
+    '<circle cx="14" cy="11.5" r="1" fill="currentColor" stroke="none"/></svg>';
+  calendar.title = 'Calendar view';
+  calendar.setAttribute('aria-label', 'Calendar view');
+  calendar.addEventListener('click', onCalendar);
+
   const settings = document.createElement('button');
   settings.type = 'button';
   settings.className = 'quiet icon';
   settings.textContent = 'Settings';
   settings.addEventListener('click', onSettings);
-  controls.append(settings);
+  controls.append(calendar, settings);
 
   header.append(headings, controls);
   view.append(header);
@@ -452,10 +448,7 @@ export function renderToday({
     summary.textContent = `Done today · ${doneToday.length}`;
     done.append(summary);
 
-    const list = document.createElement('ul');
-    list.className = 'tasks';
-    for (const task of doneToday) list.append(rowOrEditor(task, ctx));
-    done.append(list);
+    done.append(taskList(doneToday, ctx));
     view.append(done);
   }
 
@@ -476,11 +469,7 @@ export function renderToday({
       heading.className = 'meta day-title';
       heading.textContent = `${dayHeading(day.due, today)} · ${day.tasks.length}`;
 
-      const list = document.createElement('ul');
-      list.className = 'tasks';
-      for (const task of day.tasks) list.append(rowOrEditor(task, ctx));
-
-      later.append(heading, list);
+      later.append(heading, taskList(day.tasks, ctx));
     }
 
     view.append(later);
