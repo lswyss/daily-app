@@ -794,4 +794,20 @@ button.quiet.glyph {
   .shell { padding: 2rem 1rem 3rem; }
   .row { flex-direction: column; gap: 0.25rem; }
   .today-header { gap: 0.5rem; }
+  .today-controls { gap: 0; }
+}
+
+/* Four controls plus a spelled-out badge pushes the date onto two lines. When
+   everything is synced the tick says so on its own, so the word is dropped —
+   but only in that state. Every failure state keeps its label, and the full text
+   stays in the aria-label either way. */
+@media (max-width: 400px) {
+  .badge.is-synced > span:not(.badge-mark) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }

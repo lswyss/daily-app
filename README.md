@@ -183,6 +183,73 @@ Saving emits the smallest mutations that describe what you did: a date change be
 `reschedule`, everything else becomes `edit`, and changing nothing writes nothing. That is
 what keeps `git log` readable as a record of intent.
 
+## Ideas
+
+A separate screen (the seedling glyph in the header, with a count when there are any).
+Reached deliberately; **ideas never appear in Today**, not even under "No date". An idea is
+not owed to anyone on a particular day, and putting it in a list of things due turns it into
+guilt.
+
+- **Capture** — type on the Ideas screen, or say "idea …" / "thought …" anywhere a capture is
+  accepted. `#idea` works too. Dictation will never produce "#idea", which is why the spoken
+  keyword is accepted.
+- **No dates, ever.** Date parsing is skipped entirely for ideas, so "try the PEG series on
+  monday" keeps those words in the text instead of having them silently parsed away.
+- **No tag prompts.** An unknown experiment code inside an idea is left in the text rather
+  than confirmed. Stopping to confirm would defeat capturing a thought in five seconds.
+- **Make a task** promotes an idea to a task due today, in one tap, with undo. That is two
+  mutations — `edit` for the type and `reschedule` for the date — so `git log` names both.
+- **Archive** marks it `done`. Ideas are never deleted by archiving; the record stays.
+
+Ideas are ordinary tasks with `type: "idea"` and `due: null`. There is no second data store
+and no second app: an idea usually becomes work, and promoting across two apps would be
+miserable.
+
+## Capture by voice: the Apple Shortcut
+
+Dictating an **idea** while your hands are busy is what this is for. Tasks are quicker to
+type; ideas are the thing that gets lost.
+
+The Shortcut writes one new file into `inbox/`. Creating a file needs no SHA, so hands-free
+capture cannot conflict with anything — that is the whole reason the inbox exists.
+
+### Building it, once
+
+In the Shortcuts app, create a shortcut named **Log to Daily**:
+
+1. **Dictate Text** — set *Stop Listening* to "After Pause".
+2. **Text** — value: `{"raw":"[Dictated Text]","type":"idea","capturedAt":"[Current Date]","source":"shortcut"}`
+   Insert *Dictated Text* and *Current Date* as variables. Set the *Current Date* variable's
+   format to **ISO 8601**.
+3. **Base64 Encode** the Text.
+4. **Get Contents of URL**:
+   - URL: `https://api.github.com/repos/lswyss/daily-data/contents/inbox/[Current Date].json`
+     (use the *Current Date* variable, formatted ISO 8601, so each capture gets its own file)
+   - Method: **PUT**
+   - Headers: `Authorization: Bearer <your token>`, `Accept: application/vnd.github+json`
+   - Request Body: **JSON**, with fields `message` (text, e.g. `capture: idea`) and `content`
+     (the Base64 output)
+
+Then say "Hey Siri, log to Daily".
+
+### How captures get filed
+
+The app drains the inbox on load and whenever you switch back to it (at most once a minute).
+Draining reads each file, files it, saves `data.json`, and only then deletes the inbox files —
+**write first, delete second**, so a failed save cannot lose a capture. Deleted files remain in
+git history regardless.
+
+- A capture with `"type": "idea"` becomes an idea. No guessing.
+- Anything that cannot be filed confidently becomes an **idea** too, rather than being guessed
+  into a dated task. An idea is the harmless resting place: visible, editable, promotable.
+- A file that cannot be read is **left in the inbox** and reported, never silently discarded.
+- Re-importing is safe: a drained task's id derives from the inbox filename, so a second
+  import of the same capture is a no-op.
+
+**The token lives in the Shortcut.** Rotating the token means editing the Shortcut too — this
+is the copy people forget.
+
+
 ## Calendar view
 
 The calendar glyph in the header opens it; **← Tasks** returns. The Today view stays the
@@ -399,7 +466,7 @@ missing features. Every feature added before validation makes abandonment more l
 | 2 | Data layer (`github.js`, `store.js`, pure `sync.js`) | **done** |
 | 3 | Setup flow (token entry, validation, clearing) | **done** |
 | 4 | Today view + minimal PWA manifest — **then stop** | **done; trial passed 2026-08-04** |
-| 5 | Apple Shortcut and inbox drain, with review queue | **not built — still the biggest ergonomic win** |
+| 5 | Apple Shortcut and inbox drain | **drain done; Shortcut is a manual setup step** |
 | 6 | Week view | superseded by the calendar's week zoom |
 | 7 | Experiment strip and day counters | |
 | 8 | Archive view | partly served by the calendar; "when did I last do X" still needs search |
@@ -411,8 +478,8 @@ missing features. Every feature added before validation makes abandonment more l
 phases are now unlocked. The three friction points found during the trial are in the decision
 log; all were real and all are fixed.
 
-Phase 5 remains unbuilt and is still the largest ergonomic win: capturing by voice while
-walking to lab was a founding goal, and everything currently has to be typed into the app.
+Phase 5's inbox drain is built. The Shortcut itself has to be assembled by hand in the
+Shortcuts app — see above — because it lives on the phone, not in this repo.
 
 ---
 
@@ -518,3 +585,19 @@ walking to lab was a founding goal, and everything currently has to be typed int
   Three tests were also fixed: they used hardcoded UTC-afternoon timestamps whose *local* day
   differs at UTC+14, so they passed in California and failed in Kiritimati. The suite now runs
   clean in five timezones.
+- **2026-08-04** — Ideas added as a view in this app, plus the inbox drain, after the owner
+  reported that voice capture mattered less for *tasks* than expected but wanted somewhere for
+  *ideas*. That reframes phase 5 rather than cancelling it: the Shortcut is an idea recorder,
+  not a task recorder. Decisions worth recording. (1) Ideas live here, not in a second app —
+  `type: "idea"` already existed, ideas attach to the same projects and experiments, and
+  promoting an idea to a task must be one tap rather than a copy between apps. A second app
+  would also mean a second token and a second thing to abandon, which is the documented
+  failure mode of the previous version. (2) Ideas are excluded from Today entirely, including
+  the undated group, so they cannot read as overdue. (3) Date parsing is skipped for ideas
+  rather than parsed and discarded, so no words are lost from the thought. (4) Tag
+  confirmation is skipped for ideas; nothing is attached unless already known, so a misheard
+  code is harmless and capture stays fast. (5) The drain imports anything ambiguous as an
+  idea instead of guessing a due date, and leaves unreadable files in the inbox.
+  Settings became a gear glyph in the same change: four controls plus a spelled-out sync
+  badge did not fit at 375px. Below 400px the badge also drops its label *only* when synced,
+  where the tick already carries the meaning; every failure state keeps its word.
