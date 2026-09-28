@@ -667,3 +667,4 @@ Shortcuts app — see above — because it lives on the phone, not in this repo.
   project spans many unrelated timelines. (4) **Repeating tasks**: one live occurrence at a
   time, next one created on completion inside the reducer with a derived id, so replay is
   safe. No schema version bump: `repeat` is optional and additive.
+- **2026-09-28** — Visual warmth, on request ("too muted"). Cream paper, leaf-green accent, a golden "today", and violet for personal. Tasks sit in rounded cards, each row carries its project colour as a left stripe and checkbox ring, group counts are pills, and the week strip is a row of tiles. All of it is one block at the end of `app.css` plus the tokens, so it can be tuned or reverted in one place.

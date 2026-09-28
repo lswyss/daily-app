@@ -275,7 +275,7 @@ export function renderCalendar({
 
   const projects = state.projects ?? [];
   const { byDate, undated } = bucketByDate(state.tasks ?? []);
-  const ctx = { ...listCtx, today };
+  const ctx = { ...listCtx, today, projects };
   const plan = { state, draft: planDraft, onDraft: onPlanDraft, onAdd };
 
   // ---- header ----------------------------------------------------------

@@ -3,13 +3,22 @@
    The accent is the only accent. Boldness is spent on the experiment day counter. */
 
 :root {
-  --paper: #E9EBE4;
-  --surface: #E9EBE4;
-  --ink: #22271F;
-  --accent: #52684A;
-  --sepia: #8A7F6B;
-  --rule: #DCD9CB;
-  --overdue: #8C3F35;
+  /* Warm cream paper, leaf green, and a golden "today" — still a field notebook,
+     but one with pressed flowers in it. */
+  --paper: #F4F1E8;
+  --surface: #FCFAF4;
+  --ink: #1F2A1E;
+  --accent: #3F6B45;
+  --accent-soft: #E2EBDB;
+  --sepia: #857A66;
+  --rule: #E4DECE;
+  --overdue: #B04A36;
+  --overdue-soft: #F7E4DC;
+  --sun: #C98F22;
+  --sun-soft: #FAEFD4;
+  --bloom: #7E5FA3;
+  --bloom-soft: #EEE7F4;
+  --shadow: 0 1px 2px rgb(60 50 30 / 0.05), 0 4px 14px rgb(60 50 30 / 0.06);
 
   --font-display: "Spectral", Georgia, serif;
   --font-body: "Karla", system-ui, -apple-system, sans-serif;
@@ -18,39 +27,46 @@
   /* Touch targets never go below 44px. */
   --tap: 44px;
   --rule-width: 1px;
+  --radius: 14px;
 
-  /* Calendar dot palette. The calendar needs more colour than the rest of the
-     app to tell projects apart, so these are deliberately desaturated — field
-     notebook inks, not highlighter pens. Personal is fixed and never reused. */
-  --dot-personal: #6E5F86;
-  --dot-default: #8A7F6B;
-  --dot-p1: #5E7355;
-  --dot-p2: #8A6D3B;
-  --dot-p3: #4F6B72;
-  --dot-p4: #7D5A6B;
-  --dot-p5: #47695C;
-  --dot-p6: #8A5A44;
+  /* Project colours. Richer than before so a project is recognisable from the
+     stripe on its row, but still inks rather than highlighters. Personal is
+     fixed and never reused. */
+  --dot-personal: #7E5FA3;
+  --dot-default: #9C9079;
+  --dot-p1: #4F8A4A;
+  --dot-p2: #C4862F;
+  --dot-p3: #3A7D8C;
+  --dot-p4: #B25A78;
+  --dot-p5: #2F8A6A;
+  --dot-p6: #C4603F;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #1A1C18;
-    --surface: #23261F;
-    --ink: #DDE0D6;
-    --accent: #8FA882;
-    --sepia: #9A927F;
-    --rule: #33372E;
-    --overdue: #C0705F;
+    --paper: #151914;
+    --surface: #1E231C;
+    --ink: #E4E8DC;
+    --accent: #9CC48C;
+    --accent-soft: #263222;
+    --sepia: #A39A86;
+    --rule: #2E3529;
+    --overdue: #E38B73;
+    --overdue-soft: #3A2520;
+    --sun: #E8BA5C;
+    --sun-soft: #3A311C;
+    --bloom: #B9A0DA;
+    --bloom-soft: #2D2638;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 14px rgb(0 0 0 / 0.25);
 
-    /* Lifted for contrast against the dark ground, same hues. */
-    --dot-personal: #A896C4;
+    --dot-personal: #B9A0DA;
     --dot-default: #A79B84;
-    --dot-p1: #8FA882;
-    --dot-p2: #C2A163;
-    --dot-p3: #79A3AC;
-    --dot-p4: #B98CA1;
-    --dot-p5: #6FA292;
-    --dot-p6: #C68B70;
+    --dot-p1: #8CC47E;
+    --dot-p2: #E0AA5E;
+    --dot-p3: #6FB3C2;
+    --dot-p4: #D98CA8;
+    --dot-p5: #64C29C;
+    --dot-p6: #E48C6C;
   }
 }
 
@@ -58,7 +74,12 @@
 
 body {
   margin: 0;
-  background: var(--paper);
+  min-height: 100vh;
+  background:
+    radial-gradient(60rem 30rem at -10% -10%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%),
+    radial-gradient(50rem 30rem at 110% 0%, color-mix(in srgb, var(--sun) 9%, transparent), transparent 70%),
+    var(--paper);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-body);
   -webkit-text-size-adjust: 100%;

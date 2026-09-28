@@ -13,6 +13,7 @@ import { taskEditor } from './taskeditor.js';
  * @typedef {object} ListContext
  * @property {string} today
  * @property {string|null} editingId
+ * @property {string[]} [projects] For row colours.
  * @property {(id: string) => void} onToggle
  * @property {(id: string) => void} [onOpen]
  * @property {(id: string, changes: object) => void} [onSaveEdit]
@@ -36,7 +37,13 @@ export function rowOrEditor(task, ctx) {
       today: ctx.today,
     });
   }
-  return taskRow({ task, today: ctx.today, onToggle: ctx.onToggle, onOpen: ctx.onOpen });
+  return taskRow({
+    task,
+    today: ctx.today,
+    onToggle: ctx.onToggle,
+    onOpen: ctx.onOpen,
+    projects: ctx.projects,
+  });
 }
 
 /**

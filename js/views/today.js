@@ -90,6 +90,23 @@ export function groupForToday(tasks, today, options = {}) {
   return { overdue, lab, personal, doneToday, upcoming, laterCount };
 }
 
+/** A small botanical mark beside the title. Decorative only. */
+const SPRIG =
+  '<svg class="sprig" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">' +
+  '<path d="M12 21V8"/>' +
+  '<path d="M12 12c-3.2-.4-5.2-2.6-5.4-5.8 3 .3 5 2.4 5.4 5.8Z" fill="currentColor" fill-opacity=".18"/>' +
+  '<path d="M12 9.5c.3-3.3 2.3-5.5 5.6-6-.1 3.3-2.2 5.5-5.6 6Z" fill="currentColor" fill-opacity=".18"/>' +
+  '<path d="M12 16.5c2.6-.2 4.5-1.8 5-4.4-2.6.1-4.4 1.7-5 4.4Z" fill="currentColor" fill-opacity=".18"/></svg>';
+
+/** A greeting that follows the clock. */
+function greeting(now = new Date()) {
+  const h = now.getHours();
+  if (h < 5) return 'Working late';
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 /** A long, human date for the header. */
 function headerDate(today) {
   const [y, m, d] = today.split('-').map(Number);
@@ -110,7 +127,13 @@ function taskGroup(title, tasks, ctx, tone = '', action = null) {
 
   const heading = document.createElement('h2');
   heading.className = 'meta group-title';
-  heading.textContent = `${title} · ${tasks.length}`;
+  const name = document.createElement('span');
+  name.textContent = title;
+  const count = document.createElement('span');
+  count.className = 'count';
+  count.textContent = String(tasks.length);
+  name.append(count);
+  heading.append(name);
   if (action) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -165,7 +188,16 @@ export function renderToday({
   onPlanDraft = () => {},
   onMoveAllToToday = () => {},
 }) {
-  const ctx = { today, editingId, onToggle, onOpen, onSaveEdit, onDelete, onCancelEdit };
+  const ctx = {
+    today,
+    editingId,
+    onToggle,
+    onOpen,
+    onSaveEdit,
+    onDelete,
+    onCancelEdit,
+    projects: state.projects ?? [],
+  };
   const view = document.createElement('div');
   view.className = 'today';
 
@@ -174,12 +206,16 @@ export function renderToday({
   header.className = 'today-header';
 
   const headings = document.createElement('div');
+  const greet = document.createElement('p');
+  greet.className = 'meta greeting';
+  greet.textContent = greeting();
   const h1 = document.createElement('h1');
-  h1.textContent = 'Daily';
+  h1.innerHTML = SPRIG;
+  h1.append(document.createTextNode('Daily'));
   const date = document.createElement('p');
-  date.className = 'meta';
+  date.className = 'header-date';
   date.textContent = headerDate(today);
-  headings.append(h1, date);
+  headings.append(greet, h1, date);
 
   const controls = document.createElement('div');
   controls.className = 'today-controls';
@@ -268,7 +304,7 @@ export function renderToday({
       ? { label: 'Move all to today', onClick: () => onMoveAllToToday(overdue.map((t) => t.id)) }
       : null),
     taskGroup('Lab', lab, ctx),
-    taskGroup('Personal', personal, ctx),
+    taskGroup('Personal', personal, ctx, 'personal'),
   ].filter(Boolean);
 
   if (groups.length === 0) {

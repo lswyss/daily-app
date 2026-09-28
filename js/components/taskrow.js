@@ -7,6 +7,7 @@
 
 import { daysBetween, localDateOf } from '../parse.js';
 import { repeatLabel } from '../repeat.js';
+import { dotClass } from '../color.js';
 
 /**
  * Human date for the metadata line. Relative wording is fine *here* — this is
@@ -120,12 +121,15 @@ function metaPrefix(task) {
  * @param {(id: string) => void} [args.onOpen]
  * @returns {HTMLElement}
  */
-export function taskRow({ task, today, onToggle, onOpen }) {
+export function taskRow({ task, today, onToggle, onOpen, projects = [] }) {
   const overdue = !task.done && task.due && task.due < today;
 
   const row = document.createElement('li');
   row.className = `task${overdue ? ' is-overdue' : ''}${task.done ? ' is-done' : ''}`;
   row.dataset.id = task.id;
+  // The project's colour, used for the stripe and the checkbox ring, so a row
+  // says which project it belongs to before you read a word.
+  row.style.setProperty('--tone', `var(--${dotClass(task, projects)})`);
 
   const toggle = document.createElement('button');
   toggle.type = 'button';

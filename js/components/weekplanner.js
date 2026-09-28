@@ -150,6 +150,7 @@ export function weekPlanner({
       day.iso === today ? 'is-today' : '',
       day.iso === planDay ? 'is-selected' : '',
       day.iso < today ? 'is-past' : '',
+      day.all.length > 0 ? 'has-tasks' : '',
     ]
       .filter(Boolean)
       .join(' ');
