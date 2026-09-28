@@ -92,6 +92,9 @@ dependencies, so they stay testable under `node --test` with a mocked fetch.
 | `js/components/taskrow.js` | A task row, shaped like a specimen label. Box completes, text opens the editor. |
 | `js/components/taskeditor.js` | Inline editor. Emits which fields changed, not a whole task. |
 | `js/components/tasklist.js` | Shared row/editor list, so Today and the calendar cannot drift apart. |
+| `js/components/capture.js` | The capture box and its confirm preview. Shared by Today, the week planner and the calendar; a box tied to a day files undated captures on that day. |
+| `js/components/weekplanner.js` | The week strip and day-by-day list on Today. `weekAgenda` is pure and tested. |
+| `js/repeat.js` | Repeating tasks: next due date, stable occurrence ids. Pure, tested. |
 | `js/calendar.js` | Calendar arithmetic: week/month/year grids, navigation, bucketing. Pure, tested. |
 | `js/color.js` | Dot colour rules and the legend. Pure, tested. |
 | `js/views/calendar.js` | The calendar view at three zoom levels. DOM only. |
@@ -182,6 +185,51 @@ Each row has two targets, both at least 44px:
 Saving emits the smallest mutations that describe what you did: a date change becomes
 `reschedule`, everything else becomes `edit`, and changing nothing writes nothing. That is
 what keeps `git log` readable as a record of intent.
+
+## Planning the week
+
+Below today's tasks, Today shows **the week**: a seven-day strip (Monday first, dots per
+task) and each day's tasks underneath. `‹ ›` move a week at a time.
+
+- **Tap a day** in the strip, or its `+`, to open a capture box for that day. Anything typed
+  there lands on that day unless you say a date. A past day is allowed without the usual
+  past-date check, so you can log something you did on Tuesday.
+- Tasks already listed higher up (overdue, today, done today) are not repeated in the week;
+  the day just says how many are shown above.
+- **Later** (collapsed) lists what is due after the week on screen, plus undated tasks.
+- The calendar's month and week views have the same per-day capture box.
+
+## Moving dates
+
+- The editor has one-tap date chips: **Today, Tomorrow, +1 day, +1 week, Next Mon**. A chip
+  saves immediately. `+1 day` and `+1 week` push the task's *current* date.
+- **Move all to today** appears on the Overdue heading when there is more than one.
+- **Shifting a timeline.** When you move a task that has an experiment code (say GB005) and
+  there are later open GB005 tasks, the toast offers to move those by the same number of
+  days. Nothing moves unless you tap it, and it has its own Undo. Only the experiment is
+  shifted, never a whole project.
+
+## Marking something done on another day
+
+- Ticking off an **overdue** task shows a toast button, `Done <due date>`, that files the
+  completion on the day it was due rather than today.
+- For any other day, open the task: **Done on** (or *Already done? Pick the day* on an open
+  task) takes a date. Clearing it on a finished task marks it not done.
+- A backdated completion is stored as noon local time on that day, so it sits on the right
+  day in the calendar.
+
+## Repeating tasks
+
+Say it in the capture box — `water plants every week`, `check plates every 2 weeks`,
+`journal club biweekly`, `lab meeting every monday`, `repot every other friday`, `daily` —
+or set **Repeat** in the editor. Rows show `↻ weekly`.
+
+- Only the **next** occurrence exists. Ticking it off creates the one after.
+- The next one keeps the rhythm of the due date: a Monday task finished on Wednesday comes
+  back next Monday. Weeks missed entirely are skipped, not stacked up as overdue.
+- Undoing the completion removes the occurrence it created (unless that one is done too).
+- To stop, set Repeat to *Does not repeat*. Deleting deletes only that occurrence.
+- Units are days and weeks. Monthly is not supported yet.
 
 ## Ideas
 
@@ -292,7 +340,7 @@ The palette is deliberately desaturated. The calendar needs more colour than the
 app to separate projects; it should still look like a field notebook. Colours repeat after
 six projects. The legend lists only what is actually on screen in the current period.
 
-**Upcoming** on the Today view lists everything scheduled beyond today, grouped by day and
+**Later** (formerly Upcoming) on the Today view lists everything scheduled beyond the week planner, grouped by day and
 collapsed by default. It exists so a task you just added for Sunday can be confirmed to
 exist — a bare count could not do that. Undated tasks sit last under "No date". The
 open/closed state survives a re-render, so completing something does not fold it back up.
@@ -324,7 +372,8 @@ often not enough; close the tab, or wait it out. This bites during development, 
       "completedAt": null,
       "createdAt": "2026-07-31T08:12:00Z",
       "source": "shortcut",
-      "notes": ""
+      "notes": "",
+      "repeat": { "every": 2, "unit": "week" }
     }
   ],
   "experiments": [
@@ -353,6 +402,10 @@ Rules:
   `E0013_PegTreatment`) must prompt. **Never auto-create a tag.**
 - Dates are absolute ISO. **Never store relative wording** — "tomorrow" resolves at entry.
 - `source` — `app` | `shortcut` | `claude-code`. Useful for debugging capture quality.
+- `repeat` — optional; `{ "every": 1-52, "unit": "day" | "week" }`. Absent on tasks that
+  never repeated, so older builds read the file unchanged. The next occurrence has the id
+  `<first id>~<due date>`, which is what makes a replayed completion a no-op.
+- A `complete` mutation may carry `{ "completedAt": "<ISO timestamp>" }` to backdate it.
 - Completed tasks are **never deleted**. `done: true` plus `completedAt`; they drop out of
   active views. History lives in the JSON and in git.
 
@@ -603,3 +656,14 @@ Shortcuts app — see above — because it lives on the phone, not in this repo.
   Settings became a gear glyph in the same change: four controls plus a spelled-out sync
   badge did not fit at 375px. Below 400px the badge also drops its label *only* when synced,
   where the tick already carries the meaning; every failure state keeps its word.
+- **2026-09-28** — Planning additions requested after two months of use. (1) **Week planner
+  on Today**: a strip plus a day-by-day list, tap a day to add to it. Upcoming became
+  **Later** and starts after the week on screen, so no row appears twice (two copies would
+  mean two editors for one task). The capture box moved to `components/capture.js` so Today,
+  the planner and the calendar share it. (2) **Backdated completion**: `complete` takes an
+  optional `completedAt`; completing an already-done task only re-dates it. (3) **Smoother
+  rescheduling**: one-tap date chips, move-all-overdue, and an opt-in offer to shift the rest
+  of an experiment's timeline. Scoped to the experiment code, not the project, because a
+  project spans many unrelated timelines. (4) **Repeating tasks**: one live occurrence at a
+  time, next one created on completion inside the reducer with a derived id, so replay is
+  safe. No schema version bump: `repeat` is optional and additive.

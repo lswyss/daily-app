@@ -25,9 +25,10 @@ import {
   planInboxDrain,
   pushMutations,
 } from './sync.js';
-import { newTaskId, parseCapture, toTask, todayIso } from './parse.js';
+import { addDays, daysBetween, newTaskId, parseCapture, timestampOn, toTask, todayIso } from './parse.js';
 import { needsConfirmation } from './views/today.js';
-import { normaliseAnchor } from './calendar.js';
+import { normaliseAnchor, startOfWeek } from './calendar.js';
+import { shortDate } from './components/taskrow.js';
 import { syncBadge } from './components/syncbadge.js';
 import { renderSetup } from './views/setup.js';
 import { renderToday } from './views/today.js';
@@ -59,6 +60,11 @@ const app = {
   zoom: 'month',
   anchor: normaliseAnchor('month', todayIso()),
   selectedDay: todayIso(),
+  // The week planner on Today: which week, which day's add box is open, and
+  // what is half-typed in it.
+  weekStart: startOfWeek(todayIso()),
+  planDay: null,
+  planDraft: '',
 };
 
 const log = createMutationLog({
@@ -79,14 +85,17 @@ function flash(text, kind = 'ok') {
 }
 
 let toastTimer = null;
-/** @param {string} text @param {{label: string, onAction: () => void}} [action] */
-function toast(text, action) {
+/**
+ * @param {string} text
+ * @param {{label: string, onAction: () => void}|Array<{label: string, onAction: () => void}>} [actions]
+ */
+function toast(text, actions) {
   toastEl.replaceChildren();
   const label = document.createElement('span');
   label.textContent = text;
   toastEl.append(label);
 
-  if (action) {
+  for (const action of [actions ?? []].flat()) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'quiet';
@@ -438,9 +447,16 @@ function render() {
         selected: app.selectedDay,
         badge,
         listCtx,
+        planDraft: app.planDraft,
+        onPlanDraft: (value) => {
+          app.planDraft = value;
+        },
+        onAdd: handleAdd,
         onZoom: (zoom, target) => {
           app.zoom = zoom;
           app.anchor = normaliseAnchor(zoom, target ?? app.anchor);
+          // In week zoom a selected day means an open add box; start with none.
+          if (zoom === 'week') app.selectedDay = null;
           render();
         },
         onAnchor: (anchor) => {
@@ -449,6 +465,7 @@ function render() {
         },
         onSelectDay: (iso) => {
           // Tapping the selected day again closes the panel.
+          if (iso !== app.selectedDay) app.planDraft = '';
           app.selectedDay = app.selectedDay === iso ? null : iso;
           render();
         },
@@ -478,6 +495,23 @@ function render() {
       ...listCtx,
       onAdd: handleAdd,
       onSettings: showSettings,
+      weekStart: app.weekStart,
+      onWeek: (weekStart) => {
+        app.weekStart = weekStart;
+        app.planDay = null;
+        render();
+      },
+      planDay: app.planDay,
+      onPlanDay: (iso) => {
+        if (iso !== app.planDay) app.planDraft = '';
+        app.planDay = iso;
+        render();
+      },
+      planDraft: app.planDraft,
+      onPlanDraft: (value) => {
+        app.planDraft = value;
+      },
+      onMoveAllToToday: handleMoveAllToToday,
       ideaCount: groupIdeas(app.local.tasks ?? []).open.length,
       onIdeas: () => {
         app.view = 'ideas';
@@ -520,10 +554,25 @@ function handleToggle(id) {
   }
 
   commit(mutation('complete', id));
-  toast(`Completed “${task.title}”`, {
-    label: 'Undo',
-    onAction: () => commit(mutation('uncomplete', id)),
-  });
+
+  const undo = { label: 'Undo', onAction: () => commit(mutation('uncomplete', id)) };
+  // Ticking off something overdue usually means it was done on the day and never
+  // marked. One tap files it there instead of today.
+  const today = todayIso();
+  if (task.due && task.due < today) {
+    toast(`Completed “${task.title}”`, [
+      undo,
+      {
+        label: `Done ${shortDate(task.due)}`,
+        onAction: () => {
+          commit(mutation('complete', id, { completedAt: timestampOn(task.due) }));
+          toast(`Filed as done on ${shortDate(task.due)}`);
+        },
+      },
+    ]);
+    return;
+  }
+  toast(`Completed “${task.title}”`, undo);
 }
 
 /**
@@ -534,11 +583,98 @@ function handleToggle(id) {
  */
 function handleSaveEdit(id, changes) {
   app.editingId = null;
+  const before = app.local.tasks.find((t) => t.id === id);
 
   if (changes.edit) commit(mutation('edit', id, changes.edit));
   if ('due' in changes) commit(mutation('reschedule', id, { due: changes.due }));
+  // Last, so a repeating task spawns its next occurrence from the new date/rule.
+  if ('completedOn' in changes) {
+    if (changes.completedOn === null) commit(mutation('uncomplete', id));
+    else commit(mutation('complete', id, { completedAt: timestampOn(changes.completedOn) }));
+  }
 
-  if (!changes.edit && !('due' in changes)) render(); // nothing changed; just close
+  if (!changes.edit && !('due' in changes) && !('completedOn' in changes)) {
+    render(); // nothing changed; just close
+    return;
+  }
+
+  if ('due' in changes && before) offerTimelineShift(before, changes.due);
+  else if ('completedOn' in changes && changes.completedOn && before) {
+    toast(`Filed as done on ${shortDate(changes.completedOn)}`);
+  }
+}
+
+/**
+ * After a task moves, offer to move the rest of its experiment with it.
+ *
+ * Experiment tasks are a timeline — sow, transfer, image on day 7 — so when one
+ * step slips by two days the later steps usually slip too. Only tasks with the
+ * same experiment code and a later due date are offered, never the whole
+ * project, and nothing moves until the button is tapped.
+ */
+function offerTimelineShift(before, newDue) {
+  const oldDue = before.due;
+  const undoMove = {
+    label: 'Undo',
+    onAction: () => commit(mutation('reschedule', before.id, { due: oldDue ?? null })),
+  };
+  if (!newDue) {
+    toast(`“${before.title}” has no date now`, undoMove);
+    return;
+  }
+  if (!oldDue || !before.experiment) {
+    toast(`Moved to ${shortDate(newDue)}`, undoMove);
+    return;
+  }
+
+  const delta = daysBetween(oldDue, newDue);
+  const later = app.local.tasks.filter(
+    (t) =>
+      t.id !== before.id &&
+      !t.done &&
+      t.experiment === before.experiment &&
+      t.due &&
+      t.due > oldDue,
+  );
+  if (delta === 0 || later.length === 0) {
+    toast(`Moved to ${shortDate(newDue)}`, undoMove);
+    return;
+  }
+
+  const sign = delta > 0 ? '+' : '−';
+  const amount = `${sign}${Math.abs(delta)} day${Math.abs(delta) === 1 ? '' : 's'}`;
+  toast(`Moved to ${shortDate(newDue)}.`, [
+    {
+      label: `Move ${later.length} later ${before.experiment} task${later.length === 1 ? '' : 's'} ${amount}`,
+      onAction: () => {
+        const moved = later.map((t) => ({ id: t.id, from: t.due }));
+        for (const t of moved) commit(mutation('reschedule', t.id, { due: addDays(t.from, delta) }));
+        toast(`Moved ${moved.length} ${before.experiment} task${moved.length === 1 ? '' : 's'} ${amount}`, {
+          label: 'Undo',
+          onAction: () => {
+            for (const t of moved) commit(mutation('reschedule', t.id, { due: t.from }));
+          },
+        });
+      },
+    },
+    undoMove,
+  ]);
+}
+
+/** Everything overdue onto today, in one go, with one undo. */
+function handleMoveAllToToday(ids) {
+  const today = todayIso();
+  const moved = ids
+    .map((id) => app.local.tasks.find((t) => t.id === id))
+    .filter(Boolean)
+    .map((t) => ({ id: t.id, from: t.due }));
+  for (const t of moved) commit(mutation('reschedule', t.id, { due: today }));
+  toast(`Moved ${moved.length} tasks to today`, {
+    label: 'Undo',
+    onAction: () => {
+      for (const t of moved) commit(mutation('reschedule', t.id, { due: t.from ?? null }));
+    },
+  });
 }
 
 function handleDelete(id) {
@@ -598,7 +734,8 @@ function handleAdd(task) {
   commit(mutation('add', task.id, task));
   // Most captures now skip the confirm step, so the toast is the feedback that
   // it landed — and the way back if it did not land the way you meant.
-  toast(`Added “${task.title}”`, {
+  const when = task.due && task.due !== todayIso() ? ` to ${shortDate(task.due)}` : '';
+  toast(`Added “${task.title}”${when}`, {
     label: 'Undo',
     onAction: () => commit(mutation('delete', task.id)),
   });

@@ -33,6 +33,7 @@ export function rowOrEditor(task, ctx) {
       onSave: ctx.onSaveEdit,
       onDelete: ctx.onDelete,
       onCancel: ctx.onCancelEdit,
+      today: ctx.today,
     });
   }
   return taskRow({ task, today: ctx.today, onToggle: ctx.onToggle, onOpen: ctx.onOpen });

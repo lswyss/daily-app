@@ -26,7 +26,7 @@ import { renderToday } from '../js/views/today.js';
 import { renderCalendar } from '../js/views/calendar.js';
 import { renderIdeas, groupIdeas } from '../js/views/ideas.js';
 import { syncBadge } from '../js/components/syncbadge.js';
-import { normaliseAnchor } from '../js/calendar.js';
+import { normaliseAnchor, startOfWeek } from '../js/calendar.js';
 
 const TODAY = '2026-08-04';
 
@@ -68,7 +68,7 @@ const state = {
     t('Move to recovery plates', '2026-08-05', { project: 'PEG Treatment', experiment: 'E0013_PegTreatment' }),
     t('Lab meeting slides', '2026-08-05', { type: 'meeting' }),
     t('Scan second root batch', '2026-08-06', { project: 'Root Atlas' }),
-    t('Water the weekend trays', '2026-08-08'),
+    t('Water the weekend trays', '2026-08-08', { repeat: { every: 1, unit: 'week' } }),
     t('Call home', '2026-08-08', { scope: 'personal' }),
     t('Harvest GB005', '2026-08-12', { project: 'Globot', experiment: 'GB005' }),
     t('Conference abstract deadline', '2026-08-28', { project: 'Root Atlas' }),
@@ -89,6 +89,8 @@ const ui = {
   selected: TODAY,
   editingId: null,
   upcomingOpen: false,
+  weekStart: startOfWeek(TODAY),
+  planDay: null,
 };
 
 function listCtx() {
@@ -116,7 +118,7 @@ function draw() {
     : ui.view === 'calendar'
     ? renderCalendar({
         state, today: TODAY, zoom: ui.zoom, anchor: ui.anchor, selected: ui.selected,
-        badge, listCtx: listCtx(),
+        badge, listCtx: listCtx(), onAdd: (x) => console.log('add', x),
         onZoom: (z, target) => { ui.zoom = z; ui.anchor = normaliseAnchor(z, target ?? ui.anchor); draw(); },
         onAnchor: (a) => { ui.anchor = normaliseAnchor(ui.zoom, a); draw(); },
         onSelectDay: (iso) => { ui.selected = ui.selected === iso ? null : iso; draw(); },
@@ -131,6 +133,11 @@ function draw() {
         onCalendar: () => { ui.view = 'calendar'; draw(); },
         onIdeas: () => { ui.view = 'ideas'; draw(); },
         ideaCount: groupIdeas(state.tasks).open.length,
+        weekStart: ui.weekStart,
+        onWeek: (w) => { ui.weekStart = w; ui.planDay = null; draw(); },
+        planDay: ui.planDay,
+        onPlanDay: (iso) => { ui.planDay = iso; draw(); },
+        onMoveAllToToday: (ids) => console.log('move all', ids),
       });
   document.getElementById('view').replaceChildren(node);
 }

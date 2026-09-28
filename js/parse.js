@@ -48,6 +48,23 @@ export function localDateOf(timestamp) {
 }
 
 /**
+ * A timestamp that falls on the given **local** day — the inverse of
+ * `localDateOf`. Used to backdate a completion: "done on Tuesday" becomes
+ * Tuesday at noon local time, which `localDateOf` reads back as Tuesday in any
+ * timezone within twelve hours of this one. Today returns `now`, so ordering by
+ * completion time still works for things ticked off as they happen.
+ *
+ * @param {string} iso Local calendar date.
+ * @param {Date} [now]
+ * @returns {string} UTC ISO timestamp.
+ */
+export function timestampOn(iso, now = new Date()) {
+  if (iso === todayIso(now)) return now.toISOString();
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d, 12, 0, 0).toISOString();
+}
+
+/**
  * Add days to an ISO date. Done in UTC so daylight saving cannot shift the result.
  * @param {string} iso
  * @param {number} days
@@ -197,6 +214,43 @@ function monthDay(month, day, year, today) {
   return isoFrom(thisYear + 1, month, day);
 }
 
+const NUMBER_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, other: 2, second: 2 };
+
+/**
+ * Find a repeat phrase: "every week", "every 2 weeks", "biweekly", "daily".
+ *
+ * "every monday" is a weekly repeat whose weekday is left behind in the text on
+ * purpose, so the date parser then puts the first occurrence on that Monday.
+ *
+ * @param {string} text
+ * @returns {{repeat: {every: number, unit: 'day'|'week'}, matched: string}|null}
+ */
+export function findRepeat(text) {
+  const count = `(\\d{1,2}|${Object.keys(NUMBER_WORDS).join('|')})`;
+  const toNumber = (word) => (/^\d+$/.test(word) ? Number(word) : NUMBER_WORDS[word.toLowerCase()]);
+
+  /** @type {Array<[RegExp, (m: RegExpMatchArray) => {every: number, unit: 'day'|'week'}|null, boolean]>} */
+  const patterns = [
+    // [pattern, resolve, keepWeekday]
+    [new RegExp(`\\bevery ${count}(?:nd)? (day|week)s?\\b`, 'i'), (m) => ({ every: toNumber(m[1]), unit: m[2].toLowerCase() }), false],
+    [new RegExp(`\\bevery ${count}(?:nd)? (?=(?:${WEEKDAY_ALTERNATION})\\b)`, 'i'), (m) => ({ every: toNumber(m[1]), unit: 'week' }), true],
+    [/\b(?:bi-?weekly|fortnightly|every fortnight)\b/i, () => ({ every: 2, unit: 'week' }), false],
+    [/\b(?:every week|weekly|once a week)\b/i, () => ({ every: 1, unit: 'week' }), false],
+    [/\b(?:every day|daily)\b/i, () => ({ every: 1, unit: 'day' }), false],
+    [new RegExp(`\\bevery (?=(?:${WEEKDAY_ALTERNATION})\\b)`, 'i'), () => ({ every: 1, unit: 'week' }), true],
+  ];
+
+  for (const [pattern, resolve] of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const repeat = resolve(match);
+    if (repeat && Number.isInteger(repeat.every) && repeat.every >= 1 && repeat.every <= 52) {
+      return { repeat, matched: match[0] };
+    }
+  }
+  return null;
+}
+
 /** Levenshtein distance, iterative and small. */
 export function editDistance(a, b) {
   if (a === b) return 0;
@@ -285,6 +339,7 @@ const CODE_STOPWORDS = new Set(['DAY', 'RUN', 'REP', 'SET', 'NO', 'PH', 'AT', 'X
  * @property {'lab'|'personal'} scope
  * @property {string} type
  * @property {string} due         Absolute ISO date.
+ * @property {{every: number, unit: 'day'|'week'}|null} repeat
  * @property {boolean} dueAssumed True when no date was found and today was assumed.
  * @property {{status: string, value: string, suggestions: string[]}|null} experiment
  * @property {{status: string, value: string, suggestions: string[]}|null} project
@@ -372,8 +427,17 @@ export function parseCapture(raw, context = {}) {
   const isIdea = type === 'idea';
   let due = isIdea ? null : today;
   let dueAssumed = !isIdea;
+  /** @type {{every: number, unit: 'day'|'week'}|null} */
+  let repeat = null;
 
   if (!isIdea) {
+    // Before the date, so "every monday" leaves "monday" for the date parser.
+    const foundRepeat = findRepeat(working);
+    if (foundRepeat) {
+      repeat = foundRepeat.repeat;
+      working = working.replace(foundRepeat.matched, ' ');
+    }
+
     const found = findDate(working, today);
     if (found) {
       due = found.due;
@@ -425,6 +489,7 @@ export function parseCapture(raw, context = {}) {
     type,
     due,
     dueAssumed,
+    repeat,
     experiment,
     project,
     matched,
@@ -452,7 +517,7 @@ export function toTask(parsed, decisions) {
   const acceptedProject =
     decisions.acceptProject ?? (parsed.project?.status === 'known' ? parsed.project.value : null);
 
-  return {
+  const task = {
     id: decisions.id,
     title: parsed.title,
     scope: parsed.scope,
@@ -466,6 +531,8 @@ export function toTask(parsed, decisions) {
     source: decisions.source ?? 'app',
     notes: '',
   };
+  if (parsed.repeat) task.repeat = parsed.repeat;
+  return task;
 }
 
 /**

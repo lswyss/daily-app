@@ -11,6 +11,9 @@
  * @module store
  */
 
+import { localDateOf } from './parse.js';
+import { isRepeat, nextOccurrence } from './repeat.js';
+
 export const SCHEMA_VERSION = 1;
 
 /** @type {readonly ['lab','personal']} */
@@ -55,6 +58,7 @@ const IMMUTABLE_TASK_FIELDS = ['id', 'createdAt', 'source'];
  * @property {string} createdAt
  * @property {'app'|'shortcut'|'claude-code'} source
  * @property {string} notes
+ * @property {import('./repeat.js').Repeat|null} [repeat]  Optional. Absent means no repeat.
  */
 
 /**
@@ -172,7 +176,16 @@ export function normaliseTask(input) {
     );
   }
 
-  return {
+  const repeat = input.repeat ?? null;
+  if (repeat !== null && !isRepeat(repeat)) {
+    throw new ValidationError('Task repeat must be {every, unit: "day"|"week"} or null', {
+      field: 'repeat',
+      value: repeat,
+    });
+  }
+
+  /** @type {Task} */
+  const task = {
     id: id.trim(),
     title: title.trim(),
     scope: /** @type {any} */ (scope),
@@ -186,6 +199,10 @@ export function normaliseTask(input) {
     source: /** @type {any} */ (source),
     notes: input.notes ?? '',
   };
+  // Only written when set, so tasks that never repeat keep their old shape and
+  // an older cached build of the app reads this file unchanged.
+  if (repeat) task.repeat = { every: repeat.every, unit: repeat.unit };
+  return task;
 }
 
 /**
@@ -216,6 +233,15 @@ export function assertMutation(m) {
         `add mutation id (${m.id}) must match payload.id (${task.id})`,
         { field: 'id', value: m.id },
       );
+    }
+  }
+  if (m.op === 'complete' && m.payload?.completedAt != null) {
+    // A backdated completion: "I did this on Tuesday and forgot to tick it".
+    if (typeof m.payload.completedAt !== 'string' || Number.isNaN(Date.parse(m.payload.completedAt))) {
+      throw new ValidationError('complete payload.completedAt must be an ISO timestamp', {
+        field: 'payload.completedAt',
+        value: m.payload.completedAt,
+      });
     }
   }
   if (m.op === 'reschedule') {
@@ -249,6 +275,12 @@ export function assertMutation(m) {
       throw new ValidationError(`edit payload.type must be one of ${TYPES.join(' | ')}`, {
         field: 'payload.type',
         value: m.payload.type,
+      });
+    }
+    if ('repeat' in m.payload && m.payload.repeat !== null && !isRepeat(m.payload.repeat)) {
+      throw new ValidationError('edit payload.repeat must be {every, unit} or null', {
+        field: 'payload.repeat',
+        value: m.payload.repeat,
       });
     }
     if ('scope' in m.payload && !SCOPES.includes(m.payload.scope)) {
@@ -339,10 +371,41 @@ export function applyMutation(state, m) {
   };
 
   switch (m.op) {
-    case 'complete':
-      return replace((t) => ({ ...t, done: true, completedAt: m.ts }));
-    case 'uncomplete':
-      return replace((t) => ({ ...t, done: false, completedAt: null }));
+    case 'complete': {
+      const before = state.tasks[index];
+      // Normally the moment of the tap. A payload date moves a completion to the
+      // day the work actually happened; completing an already-done task that way
+      // just corrects its date.
+      const completedAt = m.payload?.completedAt ?? m.ts;
+      const result = replace((t) => ({ ...t, done: true, completedAt }));
+
+      // Finishing one occurrence of a repeating task brings in the next. The id
+      // is derived, so a replay or a second tap cannot create it twice. Only on a
+      // real completion — re-dating a finished task must not spawn another.
+      if (before.done || !isRepeat(before.repeat)) return result;
+      const next = nextOccurrence(before, localDateOf(completedAt) ?? before.due, m.ts);
+      if (!next || result.state.tasks.some((t) => t.id === next.id)) return result;
+      return {
+        state: { ...result.state, tasks: [...result.state.tasks, normaliseTask(next)] },
+        skipped: null,
+      };
+    }
+    case 'uncomplete': {
+      const before = state.tasks[index];
+      const result = replace((t) => ({ ...t, done: false, completedAt: null }));
+      // Undoing a completion takes back the occurrence it created — unless that
+      // one has already been done itself, in which case it is history now.
+      if (!before.done || !isRepeat(before.repeat)) return result;
+      const next = nextOccurrence(before, localDateOf(before.completedAt) ?? before.due, m.ts);
+      if (!next) return result;
+      return {
+        state: {
+          ...result.state,
+          tasks: result.state.tasks.filter((t) => !(t.id === next.id && !t.done)),
+        },
+        skipped: null,
+      };
+    }
     case 'reschedule':
       return replace((t) => ({ ...t, due: m.payload?.due ?? null }));
     case 'edit':

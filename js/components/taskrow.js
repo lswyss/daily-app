@@ -6,6 +6,7 @@
  */
 
 import { daysBetween, localDateOf } from '../parse.js';
+import { repeatLabel } from '../repeat.js';
 
 /**
  * Human date for the metadata line. Relative wording is fine *here* — this is
@@ -156,6 +157,7 @@ export function taskRow({ task, today, onToggle, onOpen }) {
   due.className = 'task-due';
   due.textContent = statusLabel(task, today);
   meta.append(document.createTextNode(metaPrefix(task)), due);
+  if (task.repeat) meta.append(document.createTextNode(` · ↻ ${repeatLabel(task.repeat)}`));
 
   open.append(title, meta);
   if (onOpen) open.addEventListener('click', () => onOpen(task.id));

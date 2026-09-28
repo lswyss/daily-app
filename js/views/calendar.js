@@ -24,6 +24,22 @@ import {
 import { dominantDotClass, dotsFor, legendFor } from '../color.js';
 import { dayHeading } from '../components/taskrow.js';
 import { taskList } from '../components/tasklist.js';
+import { captureForm } from '../components/capture.js';
+
+/** A capture box that files onto one day. */
+function dayCapture(iso, plan, ctx) {
+  return captureForm({
+    id: `cal-plan-${iso}`,
+    label: iso === ctx.today ? 'Add to today' : `Add to ${dayHeading(iso, ctx.today)}`,
+    placeholder: iso < ctx.today ? 'something you did that day' : 'water GB005',
+    state: plan.state,
+    today: ctx.today,
+    day: iso,
+    draft: plan.draft,
+    onDraft: plan.onDraft,
+    onAdd: plan.onAdd,
+  });
+}
 
 /** @param {string} iso */
 function dayNumber(iso) {
@@ -60,7 +76,7 @@ function daySummary(iso, tasks) {
 
 // ------------------------------------------------------------------- week
 
-function weekView({ anchor, byDate, ctx, projects }) {
+function weekView({ anchor, byDate, ctx, projects, selected, onSelectDay, plan }) {
   const wrap = document.createElement('div');
   wrap.className = 'cal-week';
 
@@ -74,7 +90,18 @@ function weekView({ anchor, byDate, ctx, projects }) {
     heading.className = 'meta day-title';
     heading.textContent = dayHeading(iso, ctx.today);
     if (tasks.length > 0) heading.append(dotRow(tasks, projects, 6));
+
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'quiet week-add';
+    add.textContent = selected === iso ? '×' : '+';
+    add.setAttribute('aria-label', selected === iso ? 'Close' : `Add a task to ${dayHeading(iso, ctx.today)}`);
+    add.setAttribute('aria-expanded', String(selected === iso));
+    add.addEventListener('click', () => onSelectDay(iso));
+    heading.append(add);
     section.append(heading);
+
+    if (selected === iso && plan.onAdd) section.append(dayCapture(iso, plan, ctx));
 
     if (tasks.length === 0) {
       const none = document.createElement('p');
@@ -92,7 +119,7 @@ function weekView({ anchor, byDate, ctx, projects }) {
 
 // ------------------------------------------------------------------ month
 
-function monthView({ anchor, byDate, ctx, projects, selected, onSelectDay }) {
+function monthView({ anchor, byDate, ctx, projects, selected, onSelectDay, plan }) {
   const wrap = document.createElement('div');
   wrap.className = 'cal-month';
 
@@ -149,6 +176,7 @@ function monthView({ anchor, byDate, ctx, projects, selected, onSelectDay }) {
     heading.className = 'meta day-title';
     heading.textContent = dayHeading(selected, ctx.today);
     panel.append(heading);
+    if (plan.onAdd) panel.append(dayCapture(selected, plan, ctx));
 
     if (tasks.length === 0) {
       const none = document.createElement('p');
@@ -238,6 +266,9 @@ export function renderCalendar({
   onBack,
   badge,
   listCtx,
+  planDraft = '',
+  onPlanDraft = () => {},
+  onAdd = null,
 }) {
   const view = document.createElement('div');
   view.className = 'calendar';
@@ -245,6 +276,7 @@ export function renderCalendar({
   const projects = state.projects ?? [];
   const { byDate, undated } = bucketByDate(state.tasks ?? []);
   const ctx = { ...listCtx, today };
+  const plan = { state, draft: planDraft, onDraft: onPlanDraft, onAdd };
 
   // ---- header ----------------------------------------------------------
   const header = document.createElement('header');
@@ -315,9 +347,9 @@ export function renderCalendar({
 
   // ---- body ------------------------------------------------------------
   if (zoom === 'week') {
-    view.append(weekView({ anchor, byDate, ctx, projects }));
+    view.append(weekView({ anchor, byDate, ctx, projects, selected, onSelectDay, plan }));
   } else if (zoom === 'month') {
-    view.append(monthView({ anchor, byDate, ctx, projects, selected, onSelectDay }));
+    view.append(monthView({ anchor, byDate, ctx, projects, selected, onSelectDay, plan }));
   } else {
     view.append(
       yearView({
