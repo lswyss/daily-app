@@ -1,6 +1,10 @@
 /* Layout and components. Tokens live in tokens.css.
    Herbarium specimen label: hairline rules, generous whitespace, no card shadows. */
 
+/* `hidden` must win over any display rule. Without this the empty toast, which
+   is display:flex, sat at the bottom of every screen as a blank pill. */
+[hidden] { display: none !important; }
+
 body {
   font-size: 16px;
   line-height: 1.55;

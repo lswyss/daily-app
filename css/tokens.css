@@ -42,8 +42,37 @@
   --dot-p6: #C4603F;
 }
 
+/* Dark is opt-in per device (Settings → Appearance). Light is the default. */
+:root[data-theme='dark'] {
+    --paper: #151914;
+    --surface: #1E231C;
+    --ink: #E4E8DC;
+    --accent: #9CC48C;
+    --accent-soft: #263222;
+    --sepia: #A39A86;
+    --rule: #2E3529;
+    --overdue: #E38B73;
+    --overdue-soft: #3A2520;
+    --sun: #E8BA5C;
+    --sun-soft: #3A311C;
+    --bloom: #B9A0DA;
+    --bloom-soft: #2D2638;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 14px rgb(0 0 0 / 0.25);
+
+    --dot-personal: #B9A0DA;
+    --dot-default: #A79B84;
+    --dot-p1: #8CC47E;
+    --dot-p2: #E0AA5E;
+    --dot-p3: #6FB3C2;
+    --dot-p4: #D98CA8;
+    --dot-p5: #64C29C;
+    --dot-p6: #E48C6C;
+}
+
+/* "Match device" in Settings. The same values, applied only when the phone
+   or computer is itself in dark mode. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root[data-theme='auto'] {
     --paper: #151914;
     --surface: #1E231C;
     --ink: #E4E8DC;

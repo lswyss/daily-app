@@ -1,12 +1,23 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Daily</title>
-<meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#F4F1E8" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#151914" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#F4F1E8">
+<script>
+  // Apply this device's saved appearance before the first paint (see js/theme.js).
+  try {
+    var t = localStorage.getItem('daily.theme');
+    if (t === 'dark' || t === 'auto') {
+      document.documentElement.dataset.theme = t;
+      document.querySelector('meta[name="color-scheme"]').content = t === 'auto' ? 'light dark' : 'dark';
+      var dark = t === 'dark' || matchMedia('(prefers-color-scheme: dark)').matches;
+      document.querySelector('meta[name="theme-color"]').content = dark ? '#151914' : '#F4F1E8';
+    }
+  } catch (e) {}
+</script>
 
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">

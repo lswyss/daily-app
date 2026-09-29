@@ -9,6 +9,7 @@
  */
 
 import { createGitHubClient } from '../github.js';
+import { THEMES, THEME_LABELS, loadTheme, setTheme } from '../theme.js';
 import {
   DEFAULT_OWNER,
   DEFAULT_REPO,
@@ -88,6 +89,31 @@ export function renderSetup({ storage, onDone = () => {} }) {
         : ''
     }
   `;
+
+  // Appearance is per device and needs no token, so it sits outside the form.
+  const appearance = document.createElement('div');
+  appearance.className = 'appearance';
+  const appearanceLabel = document.createElement('p');
+  appearanceLabel.className = 'meta';
+  appearanceLabel.textContent = 'Appearance on this device';
+  const choices = document.createElement('div');
+  choices.className = 'chips';
+  const current = loadTheme(storage);
+  const buttons = THEMES.map((theme) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'chip is-choice';
+    button.textContent = THEME_LABELS[theme];
+    button.setAttribute('aria-pressed', String(theme === current));
+    button.addEventListener('click', () => {
+      setTheme(theme, storage);
+      for (const b of buttons) b.setAttribute('aria-pressed', String(b === button));
+    });
+    return button;
+  });
+  choices.append(...buttons);
+  appearance.append(document.createElement('hr'), appearanceLabel, choices);
+  section.append(appearance);
 
   const form = /** @type {HTMLFormElement} */ (section.querySelector('form'));
   const tokenInput = /** @type {HTMLInputElement} */ (section.querySelector('#token'));
